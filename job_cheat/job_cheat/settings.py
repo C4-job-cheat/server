@@ -8,7 +8,6 @@ load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -54,6 +53,15 @@ INSTALLED_APPS = [
 
     'main_app',
 
+    # common/core utilities
+    'core',
+
+    # feature apps
+    'personas',
+    'cover_letters',
+    'interviews',
+    'job_search',
+
     'rest_framework',
 
     'corsheaders',
@@ -69,6 +77,16 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Django REST framework global settings
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'core.authentication.FirebaseAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
 
 ROOT_URLCONF = 'job_cheat.urls'
 
@@ -92,11 +110,12 @@ WSGI_APPLICATION = 'job_cheat.wsgi.application'
 
 # Firebase Admin 초기화 (서비스 계정 경로 또는 JSON 문자열)
 import firebase_admin
-from firebase_admin import credentials, auth
+from firebase_admin import credentials, auth, firestore
 
 FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', '')
 FIREBASE_CRED_PATH = os.getenv('FIREBASE_CREDENTIALS')
 FIREBASE_CRED_JSON = os.getenv('FIREBASE_CREDENTIALS_JSON')
+FIREBASE_INIT_ERROR = None
 
 if not firebase_admin._apps:
     try:
@@ -110,9 +129,16 @@ if not firebase_admin._apps:
         firebase_admin.initialize_app(cred, {
             'projectId': FIREBASE_PROJECT_ID or None,
         })
-    except Exception:
+        
+        # Firestore 클라이언트 초기화
+        db = firestore.client()
+        # 앱 핸들을 전역으로 유지
+        app = firebase_admin.get_app()
+    except Exception as e:
         # 개발 초기 단계에서는 Firebase 미설정이어도 앱이 뜨도록 허용
-        pass
+        db = None
+        app = None
+        FIREBASE_INIT_ERROR = str(e)
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
@@ -172,6 +198,11 @@ from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'ngrok-skip-browser-warning',
 ]
+
+# Firestore 클라이언트와 앱 핸들을 전역에서 사용할 수 있도록 설정
+FIREBASE_DB = db
+FIREBASE_APP = app
+FIREBASE_INIT_ERROR = FIREBASE_INIT_ERROR
 
 
 
