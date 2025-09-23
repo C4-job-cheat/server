@@ -1,5 +1,6 @@
 from django.http import JsonResponse
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -13,7 +14,7 @@ class VerifyFirebaseIdTokenView(APIView):
 
     def post(self, request):
         try:
-            # request.user는 FirebaseAuthentication이 만든 FirebaseUser
+            # request.user는 FirebaseAuthentication이 만든 FirebaseUser입니다.
             firebase_user = request.user
             claims = getattr(firebase_user, 'claims', {})
 
@@ -32,11 +33,11 @@ class VerifyFirebaseIdTokenView(APIView):
 
 
 class SyncFirebaseUserView(APIView):
-    """Create or update Firestore user doc based on Firebase idToken claims.
+    '''Firebase idToken 클레임을 이용해 Firestore 사용자 문서를 생성하거나 갱신합니다.
 
-    - If the user doc doesn't exist, create it (sign-up) and return profile.
-    - If it exists, update last_login_at/profile fields (sign-in) and return profile.
-    """
+    - 문서가 없으면 가입 흐름으로 간주해 새 문서를 생성하고 프로필을 반환합니다.
+    - 문서가 있으면 마지막 로그인과 프로필 필드를 갱신한 뒤 프로필을 반환합니다.
+    '''
 
     permission_classes = [IsAuthenticated]
 
@@ -44,10 +45,10 @@ class SyncFirebaseUserView(APIView):
         try:
             claims = getattr(request.user, "claims", {})
             data = upsert_user_from_claims(claims, settings.FIREBASE_DB)
-            serializer = FirebaseUserSerializer(data)
+            serializer = FirebaseUserSerializer(instance=data)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        except RuntimeError as e:
-            # Firestore not initialized
-            return Response({"detail": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except ImproperlyConfigured as exc:
+            # Firestore가 초기화되지 않은 경우
+            return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -1,3 +1,4 @@
 from django.contrib import admin
 
-# Register your models here.
+# 관리자 사이트에 노출할 모델을 이곳에 등록합니다.
+

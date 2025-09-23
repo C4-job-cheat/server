@@ -1,5 +1,6 @@
 from pathlib import Path
 import os
+from django.core.exceptions import ImproperlyConfigured
 
 from dotenv import load_dotenv
 
@@ -108,37 +109,78 @@ TEMPLATES = [
 WSGI_APPLICATION = 'job_cheat.wsgi.application'
 
 
-# Firebase Admin 초기화 (서비스 계정 경로 또는 JSON 문자열)
+# Firebase Admin 초기화 (환경 변수 기반 설정)
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
 
-FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', '')
-FIREBASE_CRED_PATH = os.getenv('FIREBASE_CREDENTIALS')
-FIREBASE_CRED_JSON = os.getenv('FIREBASE_CREDENTIALS_JSON')
+FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID")
+FIREBASE_CRED_PATH = os.getenv("FIREBASE_CREDENTIALS")
+FIREBASE_CRED_JSON = os.getenv("FIREBASE_CREDENTIALS_JSON")
+FIREBASE_STORAGE_BUCKET = os.getenv("FIREBASE_STORAGE_BUCKET")
+FIREBASE_EMULATOR_HOST = os.getenv("FIRESTORE_EMULATOR_HOST")
 FIREBASE_INIT_ERROR = None
+FIREBASE_APP = None
+FIREBASE_DB = None
 
-if not firebase_admin._apps:
-    try:
-        cred = None
-        if FIREBASE_CRED_JSON:
-            cred = credentials.Certificate.from_json(FIREBASE_CRED_JSON)
-        elif FIREBASE_CRED_PATH:
-            cred = credentials.Certificate(FIREBASE_CRED_PATH)
-        else:
-            cred = credentials.ApplicationDefault()
-        firebase_admin.initialize_app(cred, {
-            'projectId': FIREBASE_PROJECT_ID or None,
-        })
-        
-        # Firestore 클라이언트 초기화
-        db = firestore.client()
-        # 앱 핸들을 전역으로 유지
+
+def _load_firebase_credentials():
+    """환경 변수에서 Firebase 서비스 계정 정보를 읽어온다."""
+    if FIREBASE_CRED_JSON:
+        return credentials.Certificate.from_json(FIREBASE_CRED_JSON)
+    if FIREBASE_CRED_PATH:
+        cred_path = Path(FIREBASE_CRED_PATH).expanduser()
+        if not cred_path.exists():
+            raise ImproperlyConfigured(
+                f"FIREBASE_CREDENTIALS 경로를 찾을 수 없습니다: {cred_path}"
+            )
+        return credentials.Certificate(str(cred_path))
+    google_credentials = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if google_credentials:
+        cred_path = Path(google_credentials).expanduser()
+        if not cred_path.exists():
+            raise ImproperlyConfigured(
+                f"GOOGLE_APPLICATION_CREDENTIALS 경로를 찾을 수 없습니다: {cred_path}"
+            )
+        return credentials.Certificate(str(cred_path))
+    raise ImproperlyConfigured(
+        "Firebase 자격 증명 환경 변수가 설정되지 않았습니다. "
+        "FIREBASE_CREDENTIALS 또는 FIREBASE_CREDENTIALS_JSON을 지정하세요."
+    )
+
+
+def _initialize_firebase():
+    """Initialise Firebase Admin app and Firestore client once."""
+    global FIREBASE_APP, FIREBASE_DB, FIREBASE_INIT_ERROR
+
+    app = None
+
+    if firebase_admin._apps:
         app = firebase_admin.get_app()
-    except Exception as e:
-        # 개발 초기 단계에서는 Firebase 미설정이어도 앱이 뜨도록 허용
-        db = None
-        app = None
-        FIREBASE_INIT_ERROR = str(e)
+    else:
+        try:
+            credential = _load_firebase_credentials()
+            options = {}
+            if FIREBASE_PROJECT_ID:
+                options["projectId"] = FIREBASE_PROJECT_ID
+            if FIREBASE_STORAGE_BUCKET:
+                options["storageBucket"] = FIREBASE_STORAGE_BUCKET
+            app = firebase_admin.initialize_app(credential, options)
+        except Exception as exc:
+            FIREBASE_INIT_ERROR = str(exc)
+            FIREBASE_APP = None
+            FIREBASE_DB = None
+            return
+
+    try:
+        FIREBASE_APP = app
+        FIREBASE_DB = firestore.client(app=app)
+    except Exception as exc:
+        FIREBASE_APP = None
+        FIREBASE_DB = None
+        FIREBASE_INIT_ERROR = str(exc)
+
+
+_initialize_firebase()
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
@@ -199,10 +241,6 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     'ngrok-skip-browser-warning',
 ]
 
-# Firestore 클라이언트와 앱 핸들을 전역에서 사용할 수 있도록 설정
-FIREBASE_DB = db
-FIREBASE_APP = app
-FIREBASE_INIT_ERROR = FIREBASE_INIT_ERROR
 
 
 

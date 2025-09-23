@@ -15,6 +15,11 @@
 
 즉, 인증 클래스와 데이터 접근 로직은 `core`, 엔드포인트는 `api`에 위치시키는 구성을 추천한다. 별도의 `auth` 앱을 신설하는 방식도 가능하지만, 현재 레포에는 `api` 앱이 존재하고 `auth/verify` 엔드포인트가 이미 `api` 내에 있으므로, 중복된 앱을 늘리지 않고 `api`에 통합하는 편이 단순하고 일관된다.
 
+## 로컬 테스트 & 에뮬레이터 설정
+- `.env`에 `FIREBASE_CREDENTIALS` 또는 `FIREBASE_CREDENTIALS_JSON`을 지정하고, 에뮬레이터를 사용할 경우 `FIRESTORE_EMULATOR_HOST=localhost:8080`처럼 호스트를 추가한다.
+- Firebase CLI가 설치되어 있다면 `firebase emulators:start --only firestore --project $FIREBASE_PROJECT_ID`로 로컬 에뮬레이터를 실행한다. (다른 포트를 사용할 때는 `.env` 값과 일치하도록 조정한다.)
+- 단위 테스트에서는 `unittest.mock.patch`로 `firebase_admin.initialize_app`과 `firestore.client`를 모킹해 네트워크 없이 `FIREBASE_DB`/`FIREBASE_INIT_ERROR` 흐름을 검증한다.
+
 ## Firestore 데이터 모델
 - 컬렉션: `users`
 - 문서 ID: Firebase `uid`

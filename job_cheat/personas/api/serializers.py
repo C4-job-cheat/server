@@ -1,0 +1,126 @@
+﻿from __future__ import annotations
+
+from typing import Any, Dict, Iterable
+
+from django.core.files.uploadedfile import UploadedFile
+from rest_framework import serializers
+
+
+class _SkillListField(serializers.ListField):
+    """쉼표 구분 문자열 입력을 허용하는 커스텀 리스트 필드."""
+
+    def to_internal_value(self, data):
+        if isinstance(data, str):
+            data = [item for item in data.split(",")]
+        return super().to_internal_value(data)
+
+
+class PersonaInputSerializer(serializers.Serializer):
+    """페르소나 기본 정보와 HTML 첨부 파일을 동시에 검증한다."""
+
+    MAX_HTML_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+    id = serializers.CharField(read_only=True)
+    persona_name = serializers.CharField(max_length=60)
+    job_category = serializers.CharField(max_length=80)
+    job_role = serializers.CharField(max_length=100)
+    school_name = serializers.CharField(max_length=120)
+    major = serializers.CharField(max_length=120)
+    skills = _SkillListField(child=serializers.CharField(allow_blank=True), allow_empty=False)
+    html_file = serializers.FileField(write_only=True)
+    html_file_path = serializers.CharField(read_only=True)
+    html_content_type = serializers.CharField(read_only=True)
+    html_file_size = serializers.IntegerField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
+
+    def _normalize_str_list(self, raw_values: Iterable[Any]) -> list[str]:
+        """문자열 리스트 입력에서 공백과 중복을 정리한다."""
+
+        seen = set()
+        normalized: list[str] = []
+        for raw in raw_values:
+            if not isinstance(raw, str):
+                raise serializers.ValidationError("문자열 배열만 허용됩니다.")
+            value = raw.strip()
+            if not value:
+                continue
+            key = value.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(value)
+        if not normalized:
+            raise serializers.ValidationError("최소 한 개 이상의 항목이 필요합니다.")
+        return normalized
+
+    def validate_skills(self, value: Any) -> list[str]:
+        """skills 필드는 리스트 또는 쉼표 구분 문자열을 허용한다."""
+
+        if isinstance(value, list):
+            return self._normalize_str_list(value)
+        raise serializers.ValidationError("skills 필드는 리스트 형식이어야 합니다.")
+
+    def validate_html_file(self, value: UploadedFile) -> UploadedFile:
+        """HTML 파일의 크기와 MIME 타입을 검사한다."""
+
+        content_type = (value.content_type or "").lower()
+        if content_type not in {"text/html", "application/xhtml+xml"}:
+            raise serializers.ValidationError("HTML 파일만 업로드할 수 있습니다.")
+        if value.size and value.size > self.MAX_HTML_FILE_SIZE:
+            raise serializers.ValidationError("HTML 파일은 최대 5MB까지 업로드할 수 있습니다.")
+        value.seek(0)
+        return value
+
+    def to_firestore_payload(
+        self,
+        *,
+        html_file_path: str,
+        html_content_type: str,
+        html_file_size: int,
+    ) -> Dict[str, Any]:
+        """업로드된 파일 정보를 포함해 Firestore 저장 구조를 생성한다."""
+
+        if not self.is_valid():
+            raise AssertionError("serializer가 유효성 검사를 통과한 뒤 호출해야 합니다.")
+        return {
+            "persona_name": self.validated_data["persona_name"].strip(),
+            "job_category": self.validated_data["job_category"].strip(),
+            "job_role": self.validated_data["job_role"].strip(),
+            "school_name": self.validated_data["school_name"].strip(),
+            "major": self.validated_data["major"].strip(),
+            "skills": self.validated_data["skills"],
+            "html_file_path": html_file_path,
+            "html_content_type": html_content_type,
+            "html_file_size": html_file_size,
+        }
+
+    def to_representation(self, instance: Dict[str, Any]) -> Dict[str, Any]:
+        """Firestore 문서를 API 응답으로 직렬화한다."""
+
+        if isinstance(instance, dict):
+            return {
+                "id": instance.get("id"),
+                "persona_name": instance.get("persona_name"),
+                "job_category": instance.get("job_category"),
+                "job_role": instance.get("job_role"),
+                "school_name": instance.get("school_name"),
+                "major": instance.get("major"),
+                "skills": instance.get("skills", []),
+                "html_file_path": instance.get("html_file_path"),
+                "html_content_type": instance.get("html_content_type"),
+                "html_file_size": instance.get("html_file_size"),
+                "created_at": instance.get("created_at"),
+                "updated_at": instance.get("updated_at"),
+            }
+        return super().to_representation(instance)
+
+    @property
+    def uploaded_html_file(self) -> UploadedFile:
+        """검증된 HTML 파일 객체를 반환한다."""
+
+        file_obj = self.validated_data.get("html_file")
+        if file_obj is None:
+            raise AssertionError("html_file 필드가 존재하지 않습니다.")
+        file_obj.seek(0)
+        return file_obj
