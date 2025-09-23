@@ -1,4 +1,4 @@
-﻿[project]
+[project]
 name = "job-cheat"
 version = "0.1.0"
 description = "Add your description here"
@@ -10,4 +10,6 @@ dependencies = [
     "django-cors-headers>=4.3",
     "firebase-admin>=6.5",
     "python-dotenv>=1.0",
+    "pinecone>=7.3.0",
+    "sentence-transformers>=5.1.1",
 ]
