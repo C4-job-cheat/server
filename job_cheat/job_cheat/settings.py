@@ -51,7 +51,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    'main_app',
+    'api',
 
     # common/core utilities
     'core',

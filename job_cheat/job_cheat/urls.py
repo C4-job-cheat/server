@@ -3,7 +3,8 @@ from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('main_app/', include('main_app.urls')),
+    # Auth/verify + Firestore user sync endpoints
+    path('api/', include('api.urls')),
     path('api/personas/', include('personas.urls')),
     path('api/cover-letters/', include('cover_letters.urls')),
     path('api/interviews/', include('interviews.urls')),

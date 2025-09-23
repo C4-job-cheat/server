@@ -24,4 +24,4 @@ uv sync
 uv run python manage.py runserver 0.0.0.0:8000
 ```
 
-- 프론트에서 받은 Firebase ID 토큰을 `POST /main_app/auth/verify/`에 전송하면 서버에서 검증하여 `uid`, `email`, `provider` 등을 응답합니다.
+- 프론트에서 받은 Firebase ID 토큰을 `POST /api/auth/verify/`에 전송하면 서버에서 검증하여 `uid`, `email`, `provider` 등을 응답합니다.

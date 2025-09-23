@@ -3,7 +3,9 @@
 ## Project Structure & Module Organization
 - `job_cheat/` holds the Django project root with `manage.py`, `pyproject.toml`, and shared Firebase configuration artifacts.
 - `job_cheat/job_cheat/` contains project configuration: `settings.py`, URL routing, and the ASGI/WSGI entry points. Configure Firebase credentials and Firestore clients here instead of Django database settings.
-- `job_cheat/main_app/` is the primary application. Keep Firestore-facing services, views, and URLs modular, and expand `tests.py` or create a `tests/` package as functionality grows.
+- `job_cheat/api/` provides HTTP endpoints (views + urls) such as `/api/auth/verify/` and `/api/auth/sync/`.
+- `job_cheat/core/` contains common utilities such as `FirebaseAuthentication` and Firestore-facing service modules (e.g., `core/services/firebase_users.py`).
+- Feature apps live under `job_cheat/` (e.g., `personas/`, `cover_letters/`, `interviews/`, `job_search/`) and encapsulate their own URLs, views, and templates.
 - Store reusable assets (templates, static files) inside app-level folders; avoid committing generated files, service account keys, or other secrets.
 
 ## Environment & Tooling
@@ -19,12 +21,12 @@
 ## Coding Style & Naming Conventions
 - Follow PEP 8 with 4-space indentation; keep line length at 88 characters to stay `black`-friendly.
 - Use `snake_case` for functions and modules, `PascalCase` for models and forms, and kebab-case for static asset names.
-- Co-locate view-specific templates under `main_app/templates/main_app/` and keep URL namespace prefixes aligned with app names.
+- Co-locate view-specific templates under each app, e.g., `personas/templates/personas/`, `cover_letters/templates/cover_letters/`. The `api` app exposes JSON endpoints and typically has no templates.
 
 ## Testing Guidelines
-- Write unit tests with Django's `TestCase` (or request factory utilities) in `main_app/tests.py`; for larger suites, split into modules under `main_app/tests/`.
+- Write unit tests with Django's `TestCase` (or request factory utilities). For app-level tests, place them under each app (e.g., `personas/tests.py` or `personas/tests/`). For API endpoints, add tests under `api/tests.py`.
 - Run `uv run python manage.py test` before opening a pull request. Aim for high coverage on views, Firestore service layers, and forms handling input.
-- Use factories or fixtures stored under `main_app/tests/fixtures/` to keep tests deterministic; do not rely on Firestore cloud state—mock or use local emulators instead.
+- Use factories or fixtures stored under `tests/fixtures/` within each app to keep tests deterministic; do not rely on Firestore cloud state—mock or use local emulators instead.
 
 ## Commit & Pull Request Guidelines
 - Commit messages should use an imperative mood (`Add job board search view`) and stay under 72 characters. Reference issues with `Refs #id` when applicable.
