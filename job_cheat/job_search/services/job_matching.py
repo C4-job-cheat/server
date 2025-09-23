@@ -112,6 +112,64 @@ def find_matching_jobs(persona_data: dict, top_k: int = 5) -> list:
     return matching_jobs
 
 
+def save_recommendations_to_firestore(user_id: str, persona_id: str, matching_jobs: list, min_score: float = 0.6) -> dict:
+    """
+    유사도가 min_score 이상인 공고들을 Firestore에 추천 데이터로 저장합니다.
+    
+    Args:
+        user_id (str): 사용자 ID
+        persona_id (str): 페르소나 ID
+        matching_jobs (list): 매칭된 공고 리스트
+        min_score (float): 최소 유사도 점수 (기본값: 0.6)
+        
+    Returns:
+        dict: 저장 결과 정보
+    """
+    db = firestore.client()
+    
+    # 유사도가 min_score 이상인 공고들만 필터링
+    filtered_jobs = [job for job in matching_jobs if job['similarity_score'] >= min_score]
+    
+    if not filtered_jobs:
+        return {
+            'success': True,
+            'message': f'유사도 {min_score} 이상인 공고가 없어서 저장할 데이터가 없습니다.',
+            'saved_count': 0
+        }
+    
+    # 기존 추천 데이터 삭제 (새로운 추천으로 교체)
+    recommendations_ref = db.collection('users').document(user_id).collection('personas').document(persona_id).collection('recommendations')
+    
+    # 기존 문서들 삭제
+    existing_docs = recommendations_ref.stream()
+    for doc in existing_docs:
+        doc.reference.delete()
+    
+    # 새로운 추천 데이터 저장
+    saved_count = 0
+    for job in filtered_jobs:
+        recommendation_data = {
+            'job_posting_id': job['firestore_id'],
+            'recommendation_score': round(job['similarity_score'] * 100),
+            'reason_summary': {
+                'match_points': [],
+                'improvement_points': [],
+                'growth_suggestions': []
+            }
+        }
+        
+        # 새 문서 ID 생성 (자동 생성)
+        recommendations_ref.add(recommendation_data)
+        saved_count += 1
+    
+    return {
+        'success': True,
+        'message': f'{saved_count}개의 추천 공고를 저장했습니다.',
+        'saved_count': saved_count,
+        'min_score': min_score
+    }
+
+
 def get_persona_and_match_jobs(user_id: str, persona_id: str, top_k: int = 5) -> dict:
     """
     사용자 ID와 페르소나 ID로 페르소나를 가져와서 매칭된 공고를 반환합니다.
@@ -150,4 +208,42 @@ def get_persona_and_match_jobs(user_id: str, persona_id: str, top_k: int = 5) ->
             'error': str(e),
             'matching_jobs': [],
             'total_matches': 0
+        }
+
+
+def save_persona_recommendations(user_id: str, persona_id: str) -> dict:
+    """
+    사용자 ID와 페르소나 ID로 페르소나를 가져와서 추천 데이터를 저장합니다.
+    min_score=0.6 이상인 모든 공고를 저장합니다.
+    
+    Args:
+        user_id (str): 사용자 ID
+        persona_id (str): 페르소나 ID
+        
+    Returns:
+        dict: 추천 저장 결과
+    """
+    try:
+        # 1. Firestore에서 페르소나 데이터 가져오기
+        persona_data = get_persona_from_firestore(user_id, persona_id)
+        
+        # 2. 매칭된 공고 찾기 (충분히 많은 수로 설정)
+        matching_jobs = find_matching_jobs(persona_data, top_k=50)  # 충분히 많은 수로 설정
+        
+        # 3. 추천 데이터 저장 (min_score=0.6으로 고정)
+        if matching_jobs:
+            recommendation_result = save_recommendations_to_firestore(user_id, persona_id, matching_jobs, min_score=0.6)
+            return recommendation_result
+        else:
+            return {
+                'success': True,
+                'message': '매칭된 공고가 없어서 저장할 데이터가 없습니다.',
+                'saved_count': 0
+            }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'saved_count': 0
         }

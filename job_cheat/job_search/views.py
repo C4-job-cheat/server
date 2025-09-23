@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.authentication import SessionAuthentication
 from .services.job_posting import add_job_to_firestore, get_all_jobs_from_firestore, vectorize_and_upsert_to_pinecone
-from .services.job_matching import get_persona_and_match_jobs, find_matching_jobs
+from .services.job_matching import get_persona_and_match_jobs, find_matching_jobs, save_persona_recommendations
 
 
 @api_view(["GET"]) 
@@ -125,6 +125,53 @@ def match_jobs_by_persona(request):
             return Response({
                 "success": False,
                 "message": f"공고 매칭 중 오류가 발생했습니다: {result['error']}"
+            }, status=500)
+            
+    except Exception as e:
+        return Response({
+            "success": False,
+            "message": f"요청 처리 중 오류가 발생했습니다: {str(e)}"
+        }, status=500)
+
+
+@api_view(["POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def save_persona_recommendations(request):
+    """
+    사용자 ID와 페르소나 ID로 페르소나를 가져와서 추천 데이터를 저장합니다.
+    request body에서 user_id, persona_id만 받습니다.
+    min_score=0.6 이상인 모든 공고를 저장합니다.
+    """
+    try:
+        user_id = request.data.get('user_id')
+        persona_id = request.data.get('persona_id')
+        
+        if not user_id:
+            return Response({
+                "success": False,
+                "message": "user_id가 필요합니다."
+            }, status=400)
+            
+        if not persona_id:
+            return Response({
+                "success": False,
+                "message": "persona_id가 필요합니다."
+            }, status=400)
+        
+        # 추천 데이터 저장
+        result = save_persona_recommendations(user_id, persona_id)
+        
+        if result['success']:
+            return Response({
+                "success": True,
+                "message": result['message'],
+                "saved_count": result['saved_count']
+            })
+        else:
+            return Response({
+                "success": False,
+                "message": f"추천 저장 중 오류가 발생했습니다: {result['error']}"
             }, status=500)
             
     except Exception as e:
