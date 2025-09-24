@@ -12,4 +12,5 @@ dependencies = [
     "python-dotenv>=1.0",
     "pinecone>=7.3.0",
     "sentence-transformers>=5.1.1",
+    "openai>=1.109.0",
 ]
