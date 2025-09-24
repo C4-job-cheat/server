@@ -56,8 +56,8 @@ def preprocess_job_to_text(job_data: dict) -> str:
     
     TODO: 삭제 예정 - 테스트용으로만 사용
     """
-    requirements = '; '.join(job_data.get('requirements', []))
-    preferred = '; '.join(job_data.get('preferred', []))
+    #requirements = '; '.join(job_data.get('requirements', []))
+    #preferred = '; '.join(job_data.get('preferred', []))
     required_qualifications = '; '.join(job_data.get('required_qualifications', []))
     preferred_qualifications = '; '.join(job_data.get('preferred_qualifications', []))
     ideal_candidate = '; '.join(job_data.get('ideal_candidate', []))
@@ -65,12 +65,12 @@ def preprocess_job_to_text(job_data: dict) -> str:
     plain_text = f"""
 제목: {job_data.get('title', '')}
 업무 내용: {job_data.get('job_description', '')}
-필수 요구사항: {requirements}
-우대사항: {preferred}
 필수 자격: {required_qualifications}
 우대 자격: {preferred_qualifications}
 인재상: {ideal_candidate}
 """
+#필수 요구사항: {requirements}
+#우대사항: {preferred}
     return plain_text.strip()
 
 # --------------------------------------------------------------------------
