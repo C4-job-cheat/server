@@ -15,19 +15,29 @@ class _SkillListField(serializers.ListField):
         return super().to_internal_value(data)
 
 
+class _CertificationListField(serializers.ListField):
+    """쉼표 구분 문자열 입력을 허용하는 커스텀 리스트 필드."""
+
+    def to_internal_value(self, data):
+        if isinstance(data, str):
+            data = [item for item in data.split(",")]
+        return super().to_internal_value(data)
+
+
 class PersonaInputSerializer(serializers.Serializer):
     """페르소나 기본 정보와 HTML 첨부 파일을 동시에 검증한다."""
 
     MAX_HTML_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
     id = serializers.CharField(read_only=True)
-    persona_name = serializers.CharField(max_length=60)
-    job_category = serializers.CharField(max_length=80)
-    job_role = serializers.CharField(max_length=100)
-    school_name = serializers.CharField(max_length=120)
-    major = serializers.CharField(max_length=120)
-    skills = _SkillListField(child=serializers.CharField(allow_blank=True), allow_empty=False)
-    html_file = serializers.FileField(write_only=True)
+    user_id = serializers.CharField(read_only=True)
+    job_category = serializers.CharField(max_length=80)  # 필수 필드
+    job_role = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    school_name = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    major = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    skills = _SkillListField(child=serializers.CharField(allow_blank=True), allow_empty=True, required=False)
+    certifications = _CertificationListField(child=serializers.CharField(allow_blank=True), allow_empty=True, required=False)
+    html_file = serializers.FileField(write_only=True)  # 필수 필드
     html_file_path = serializers.CharField(read_only=True)
     html_content_type = serializers.CharField(read_only=True)
     html_file_size = serializers.IntegerField(read_only=True)
@@ -50,8 +60,7 @@ class PersonaInputSerializer(serializers.Serializer):
                 continue
             seen.add(key)
             normalized.append(value)
-        if not normalized:
-            raise serializers.ValidationError("최소 한 개 이상의 항목이 필요합니다.")
+        # 빈 배열도 허용 (선택사항 필드)
         return normalized
 
     def validate_skills(self, value: Any) -> list[str]:
@@ -60,6 +69,13 @@ class PersonaInputSerializer(serializers.Serializer):
         if isinstance(value, list):
             return self._normalize_str_list(value)
         raise serializers.ValidationError("skills 필드는 리스트 형식이어야 합니다.")
+
+    def validate_certifications(self, value: Any) -> list[str]:
+        """certifications 필드는 리스트 또는 쉼표 구분 문자열을 허용한다."""
+
+        if isinstance(value, list):
+            return self._normalize_str_list(value)
+        raise serializers.ValidationError("certifications 필드는 리스트 형식이어야 합니다.")
 
     def validate_html_file(self, value: UploadedFile) -> UploadedFile:
         """HTML 파일의 크기와 MIME 타입을 검사한다."""
@@ -84,12 +100,12 @@ class PersonaInputSerializer(serializers.Serializer):
         if not self.is_valid():
             raise AssertionError("serializer가 유효성 검사를 통과한 뒤 호출해야 합니다.")
         return {
-            "persona_name": self.validated_data["persona_name"].strip(),
             "job_category": self.validated_data["job_category"].strip(),
-            "job_role": self.validated_data["job_role"].strip(),
-            "school_name": self.validated_data["school_name"].strip(),
-            "major": self.validated_data["major"].strip(),
-            "skills": self.validated_data["skills"],
+            "job_role": self.validated_data.get("job_role", "").strip() if self.validated_data.get("job_role") else "",
+            "school_name": self.validated_data.get("school_name", "").strip() if self.validated_data.get("school_name") else "",
+            "major": self.validated_data.get("major", "").strip() if self.validated_data.get("major") else "",
+            "skills": self.validated_data.get("skills", []),
+            "certifications": self.validated_data.get("certifications", []),
             "html_file_path": html_file_path,
             "html_content_type": html_content_type,
             "html_file_size": html_file_size,
@@ -101,12 +117,13 @@ class PersonaInputSerializer(serializers.Serializer):
         if isinstance(instance, dict):
             return {
                 "id": instance.get("id"),
-                "persona_name": instance.get("persona_name"),
+                "user_id": instance.get("user_id"),
                 "job_category": instance.get("job_category"),
                 "job_role": instance.get("job_role"),
                 "school_name": instance.get("school_name"),
                 "major": instance.get("major"),
                 "skills": instance.get("skills", []),
+                "certifications": instance.get("certifications", []),
                 "html_file_path": instance.get("html_file_path"),
                 "html_content_type": instance.get("html_content_type"),
                 "html_file_size": instance.get("html_file_size"),

@@ -15,6 +15,14 @@ class PersonaHtmlUploadError(RuntimeError):
     """페르소나 HTML 파일 업로드 중 발생한 예외."""
 
 
+class PersonaJsonUploadError(RuntimeError):
+    """페르소나 JSON 파일 업로드 중 발생한 예외."""
+
+
+class PersonaFileDeleteError(RuntimeError):
+    """페르소나 파일 삭제 중 발생한 예외."""
+
+
 def _resolve_bucket(bucket=None):
     """Firebase Storage 버킷 인스턴스를 가져온다."""
 
@@ -46,7 +54,7 @@ def upload_persona_html(
         raise ValueError("document_id 값이 필요합니다.")
 
     bucket_instance = _resolve_bucket(bucket=bucket)
-    blob_path = f"personas/{user_id}/inputs/{document_id}/{user_id}.html"
+    blob_path = f"personas/{user_id}/inputs/{user_id}.html"
     blob = bucket_instance.blob(blob_path)
     blob.cache_control = cache_control
 
@@ -72,4 +80,64 @@ def upload_persona_html(
         "content_type": content_type,
         "size": size if size is not None else blob.size,
     }
+
+
+def upload_persona_json(
+    *,
+    user_id: str,
+    document_id: str,
+    json_content: str,
+    bucket=None,
+    cache_control: str = "public, max-age=3600",
+) -> Dict[str, Any]:
+    """JSON 문자열을 Storage에 업로드하고 메타데이터를 반환한다."""
+
+    if not user_id:
+        raise ValueError("user_id 값이 필요합니다.")
+    if not document_id:
+        raise ValueError("document_id 값이 필요합니다.")
+    if not json_content:
+        raise ValueError("json_content 값이 필요합니다.")
+
+    bucket_instance = _resolve_bucket(bucket=bucket)
+    blob_path = f"personas/{user_id}/inputs/{document_id}.json"
+    blob = bucket_instance.blob(blob_path)
+    blob.cache_control = cache_control
+
+    try:
+        blob.upload_from_string(json_content, content_type="application/json")
+    except (gcloud_exceptions.GoogleCloudError, Exception) as exc:
+        logger.exception("Firebase Storage JSON 업로드 실패", extra={"user_id": user_id, "document_id": document_id})
+        raise PersonaJsonUploadError(str(exc)) from exc
+
+    return {
+        "path": blob_path,
+        "content_type": "application/json",
+        "size": len(json_content.encode('utf-8')),
+    }
+
+
+def delete_persona_file(
+    *,
+    file_path: str,
+    bucket=None,
+) -> bool:
+    """Storage에서 파일을 삭제한다."""
+
+    if not file_path:
+        raise ValueError("file_path 값이 필요합니다.")
+
+    bucket_instance = _resolve_bucket(bucket=bucket)
+    blob = bucket_instance.blob(file_path)
+
+    try:
+        blob.delete()
+        logger.info(f"파일 삭제 완료: {file_path}")
+        return True
+    except gcloud_exceptions.NotFound:
+        logger.warning(f"삭제할 파일을 찾을 수 없음: {file_path}")
+        return False
+    except (gcloud_exceptions.GoogleCloudError, Exception) as exc:
+        logger.exception("Firebase Storage 파일 삭제 실패", extra={"file_path": file_path})
+        raise PersonaFileDeleteError(str(exc)) from exc
 

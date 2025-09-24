@@ -21,17 +21,17 @@ class SaveUserPersonaInputTests(SimpleTestCase):
         snapshot.to_dict.return_value = snapshot_payload or {}
         doc_ref.get.return_value = snapshot
 
-        input_collection = MagicMock()
-        input_collection.document.return_value = doc_ref
+        personas_collection = MagicMock()
+        personas_collection.document.return_value = doc_ref
 
         user_doc = MagicMock()
-        user_doc.collection.return_value = input_collection
+        user_doc.collection.return_value = personas_collection
 
-        collection = MagicMock()
-        collection.document.return_value = user_doc
+        users_collection = MagicMock()
+        users_collection.document.return_value = user_doc
 
         client = MagicMock()
-        client.collection.return_value = collection
+        client.collection.return_value = users_collection
 
         return client, doc_ref
 
@@ -64,6 +64,7 @@ class SaveUserPersonaInputTests(SimpleTestCase):
         doc_ref.set.assert_called_once()
         stored_payload = doc_ref.set.call_args[0][0]
         self.assertEqual(stored_payload["persona_name"], payload["persona_name"])
+        self.assertEqual(stored_payload["user_id"], "user-123")
         self.assertIs(stored_payload["created_at"], firestore.SERVER_TIMESTAMP)
         self.assertEqual(result["id"], str(fixed_uuid))
         self.assertEqual(result["school_name"], payload["school_name"])

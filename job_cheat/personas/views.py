@@ -7,6 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+
+
 from core.authentication import FirebaseAuthentication
 from core.services.firebase_personas import (
     PersonaInputSaveError,
@@ -15,6 +17,10 @@ from core.services.firebase_personas import (
 from core.services.firebase_storage import (
     PersonaHtmlUploadError,
     upload_persona_html,
+)
+from core.services.persona_html_processor import (
+    PersonaHtmlProcessingError,
+    process_persona_html_to_json,
 )
 from personas.api.serializers import PersonaInputSerializer
 
@@ -46,6 +52,7 @@ class PersonaInputCreateView(APIView):
         html_file = serializer.uploaded_html_file
 
         try:
+            # 1. HTML 파일을 Storage에 업로드
             upload_result = upload_persona_html(
                 user_id=user_id,
                 document_id=document_id,
@@ -54,11 +61,35 @@ class PersonaInputCreateView(APIView):
         except PersonaHtmlUploadError as exc:
             raise exceptions.APIException(f"HTML 파일 업로드에 실패했습니다: {exc}") from exc
 
+        # 2. HTML 파일을 읽어서 JSON으로 변환하고 Storage에 저장
+        html_file.seek(0)  # 파일 포인터를 처음으로 이동
+        html_content = html_file.read().decode('utf-8')
+        
+        try:
+            processing_result = process_persona_html_to_json(
+                user_id=user_id,
+                document_id=document_id,
+                html_content=html_content,
+                html_file_path=upload_result["path"],
+            )
+        except PersonaHtmlProcessingError as exc:
+            raise exceptions.APIException(f"HTML 파일 처리에 실패했습니다: {exc}") from exc
+
+        # 3. Firestore에 메타데이터 저장 (JSON 파일 정보 포함)
         payload = serializer.to_firestore_payload(
             html_file_path=upload_result["path"],
             html_content_type=upload_result["content_type"],
             html_file_size=upload_result["size"],
         )
+        
+        # JSON 파일 정보 추가
+        payload.update({
+            "json_file_path": processing_result["json_file_path"],
+            "json_content_type": processing_result["json_content_type"],
+            "json_file_size": processing_result["json_file_size"],
+            "conversations_count": processing_result["conversations_count"],
+            "html_file_deleted": processing_result["html_file_deleted"],
+        })
 
         try:
             firestore_result = save_user_persona_input(

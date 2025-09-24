@@ -13,3 +13,5 @@ db.sqlite3
 
 .env
 !.env.example
+
+ai-chatlog-converter/

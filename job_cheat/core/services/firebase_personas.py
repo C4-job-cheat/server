@@ -12,8 +12,8 @@ from google.api_core import exceptions as google_exceptions
 
 logger = logging.getLogger(__name__)
 
-PERSONA_COLLECTION = "personas"
-INPUT_SUBCOLLECTION = "inputs"
+USER_COLLECTION = "users"
+PERSONA_SUBCOLLECTION = "personas"
 
 
 class PersonaInputSaveError(RuntimeError):
@@ -46,14 +46,15 @@ def save_user_persona_input(
     client = _resolve_db(db=db)
     resolved_document_id = document_id or str(uuid4())
     doc_ref = (
-        client.collection(PERSONA_COLLECTION)
+        client.collection(USER_COLLECTION)
         .document(user_id)
-        .collection(INPUT_SUBCOLLECTION)
+        .collection(PERSONA_SUBCOLLECTION)
         .document(resolved_document_id)
     )
 
     firestore_payload = {
         **payload,
+        "user_id": user_id,
         "created_at": firestore.SERVER_TIMESTAMP,
         "updated_at": firestore.SERVER_TIMESTAMP,
     }

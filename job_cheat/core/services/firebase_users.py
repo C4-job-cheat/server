@@ -12,9 +12,7 @@ USER_COLLECTION = "users"
 ALLOWED_PROFILE_FIELDS = (
     "email",
     "display_name",
-    "photo_url",
     "email_verified",
-    "provider_id",
 )
 
 
