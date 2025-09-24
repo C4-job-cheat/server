@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from .services.job_posting import add_job_to_firestore, get_all_jobs_from_firestore, vectorize_and_upsert_to_pinecone
 from .services.job_matching import save_persona_recommendations_score, calculate_persona_job_scores, calculate_persona_job_scores_from_data
-from .services.recommendation import get_user_recommendations
+from .services.recommendation import get_user_recommendations, get_job_detail_with_recommendation
 
 
 @api_view(["GET"]) 
@@ -157,10 +157,10 @@ def get_user_recommendations_view(request):
         # 추천 공고 정보 가져오기
         result = get_user_recommendations(user_id, persona_id)
         
-        if result['success']:
+        if 'error' not in result:
             return Response({
-                "success": True,
-                "message": result['message'],
+                "persona_card": result['persona_card'],
+                "competency": result['competency'],
                 "recommendations": result['recommendations'],
                 "total_count": result['total_count']
             })
@@ -168,6 +168,52 @@ def get_user_recommendations_view(request):
             return Response({
                 "success": False,
                 "message": f"추천 공고 조회 중 오류가 발생했습니다: {result['error']}"
+            }, status=500)
+            
+    except Exception as e:
+        return Response({
+            "success": False,
+            "message": f"요청 처리 중 오류가 발생했습니다: {str(e)}"
+        }, status=500)
+
+
+@api_view(["GET"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def get_job_detail_with_recommendation_view(request, job_posting_id):
+    """
+    특정 공고의 상세 정보와 추천 이유를 반환합니다.
+    path parameter에서 job_posting_id를, query parameter에서 user_id, persona_id를 받습니다.
+    """
+    try:
+        user_id = request.GET.get('user_id')
+        persona_id = request.GET.get('persona_id')
+        
+        if not user_id:
+            return Response({
+                "success": False,
+                "message": "user_id가 필요합니다."
+            }, status=400)
+            
+        if not persona_id:
+            return Response({
+                "success": False,
+                "message": "persona_id가 필요합니다."
+            }, status=400)
+            
+        
+        # 공고 상세 정보와 추천 이유 가져오기
+        result = get_job_detail_with_recommendation(user_id, persona_id, job_posting_id)
+        
+        if result['success']:
+            return Response({
+                "job_posting": result['job_posting'],
+                "recommendation": result['recommendation']
+            })
+        else:
+            return Response({
+                "success": False,
+                "message": f"공고 상세 정보 조회 중 오류가 발생했습니다: {result['error']}"
             }, status=500)
             
     except Exception as e:
