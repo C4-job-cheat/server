@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from .services.job_posting import add_job_to_firestore, get_all_jobs_from_firestore, vectorize_and_upsert_to_pinecone
 from .services.job_matching import save_persona_recommendations_score, calculate_persona_job_scores, calculate_persona_job_scores_from_data
+from .services.recommendation_retrieval import get_user_recommendations
 
 
 @api_view(["GET"]) 
@@ -120,6 +121,53 @@ def save_persona_recommendations_view(request):
             return Response({
                 "success": False,
                 "message": f"추천 저장 중 오류가 발생했습니다: {result['error']}"
+            }, status=500)
+            
+    except Exception as e:
+        return Response({
+            "success": False,
+            "message": f"요청 처리 중 오류가 발생했습니다: {str(e)}"
+        }, status=500)
+
+
+@api_view(["GET"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def get_user_recommendations_view(request):
+    """
+    사용자의 페르소나에 저장된 추천 공고들을 상세 정보와 함께 반환합니다.
+    query parameter에서 user_id, persona_id를 받습니다.
+    """
+    try:
+        user_id = request.GET.get('user_id')
+        persona_id = request.GET.get('persona_id')
+        
+        if not user_id:
+            return Response({
+                "success": False,
+                "message": "user_id가 필요합니다."
+            }, status=400)
+            
+        if not persona_id:
+            return Response({
+                "success": False,
+                "message": "persona_id가 필요합니다."
+            }, status=400)
+        
+        # 추천 공고 정보 가져오기
+        result = get_user_recommendations(user_id, persona_id)
+        
+        if result['success']:
+            return Response({
+                "success": True,
+                "message": result['message'],
+                "recommendations": result['recommendations'],
+                "total_count": result['total_count']
+            })
+        else:
+            return Response({
+                "success": False,
+                "message": f"추천 공고 조회 중 오류가 발생했습니다: {result['error']}"
             }, status=500)
             
     except Exception as e:
