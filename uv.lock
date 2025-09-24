@@ -534,6 +534,7 @@ dependencies = [
     { name = "djangorestframework" },
     { name = "firebase-admin" },
     { name = "python-dotenv" },
+    { name = "requests" },
     { name = "selectolax" },
 ]
 
@@ -544,6 +545,7 @@ requires-dist = [
     { name = "djangorestframework", specifier = ">=3.15" },
     { name = "firebase-admin", specifier = ">=6.5" },
     { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "requests", specifier = ">=2.32.5" },
     { name = "selectolax", specifier = ">=0.3.34,<0.4" },
 ]
 

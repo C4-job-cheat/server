@@ -63,10 +63,18 @@ class PersonaInputCreateViewTests(TestCase):
         }
 
         with patch("personas.views.upload_persona_html", return_value={
-            "path": "personas/user-123/inputs/generated-id.html",
+            "path": "users/user-123/html/user-123.html",
             "content_type": "text/html",
             "size": 42,
         }) as mocked_upload, patch(
+            "personas.views.process_persona_html_to_json", return_value={
+                "json_file_path": "users/user-123/json/user-123.json",
+                "json_content_type": "application/json",
+                "json_file_size": 1024,
+                "conversations_count": 5,
+                "html_file_deleted": True,
+            }
+        ) as mocked_process, patch(
             "personas.views.save_user_persona_input",
             return_value=firestore_result,
         ) as mocked_save:
@@ -74,6 +82,7 @@ class PersonaInputCreateViewTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         mocked_upload.assert_called_once()
+        mocked_process.assert_called_once()
         mocked_save.assert_called_once()
         self.assertEqual(response.data["html_file_path"], firestore_result["html_file_path"])
         self.assertEqual(response["Location"], "/api/personas/inputs/generated-id")
@@ -100,10 +109,18 @@ class PersonaInputCreateViewTests(TestCase):
         self.client.force_authenticate(user=user)
 
         with patch("personas.views.upload_persona_html", return_value={
-            "path": "personas/user-123/inputs/generated-id.html",
+            "path": "users/user-123/html/user-123.html",
             "content_type": "text/html",
             "size": 42,
         }), patch(
+            "personas.views.process_persona_html_to_json", return_value={
+                "json_file_path": "users/user-123/json/user-123.json",
+                "json_content_type": "application/json",
+                "json_file_size": 1024,
+                "conversations_count": 5,
+                "html_file_deleted": True,
+            }
+        ), patch(
             "personas.views.save_user_persona_input",
             side_effect=PersonaInputSaveError("boom"),
         ):

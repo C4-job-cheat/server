@@ -1,4 +1,4 @@
-﻿[project]
+[project]
 name = "job-cheat"
 version = "0.1.0"
 description = "Add your description here"
@@ -11,4 +11,5 @@ dependencies = [
     "firebase-admin>=6.5",
     "python-dotenv>=1.0",
     "selectolax>=0.3.34,<0.4",
+    "requests>=2.32.5",
 ]

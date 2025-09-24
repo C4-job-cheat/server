@@ -54,26 +54,25 @@ def upload_persona_html(
         raise ValueError("document_id 값이 필요합니다.")
 
     bucket_instance = _resolve_bucket(bucket=bucket)
-    blob_path = f"personas/{user_id}/inputs/{user_id}.html"
+    # 요구사항에 따라 userid 기반으로 HTML 파일 저장
+    blob_path = f"users/{user_id}/html/{user_id}.html"
     blob = bucket_instance.blob(blob_path)
     blob.cache_control = cache_control
 
     content_type = getattr(file_obj, "content_type", None) or "text/html"
 
+    # 파일 포인터를 처음으로 이동 (업로드 전)
     file_obj.seek(0)
 
     try:
         blob.upload_from_file(file_obj, content_type=content_type)
+        logger.info(f"Firebase Storage 업로드 성공: {blob_path}")
     except (gcloud_exceptions.GoogleCloudError, Exception) as exc:
         logger.exception("Firebase Storage 업로드 실패", extra={"user_id": user_id, "document_id": document_id})
         raise PersonaHtmlUploadError(str(exc)) from exc
 
     size = getattr(file_obj, "size", None)
-    # 업로드 후 재사용을 위해 포인터를 다시 원위치로 돌려둔다.
-    try:
-        file_obj.seek(0)
-    except Exception:  # pragma: no cover - 일부 파일 객체는 seek 미지원
-        pass
+    # 업로드 후 파일 포인터는 그대로 두고 호출자가 필요에 따라 관리하도록 함
 
     return {
         "path": blob_path,
@@ -100,7 +99,8 @@ def upload_persona_json(
         raise ValueError("json_content 값이 필요합니다.")
 
     bucket_instance = _resolve_bucket(bucket=bucket)
-    blob_path = f"personas/{user_id}/inputs/{document_id}.json"
+    # 요구사항에 따라 userid.json으로 저장
+    blob_path = f"users/{user_id}/json/{user_id}.json"
     blob = bucket_instance.blob(blob_path)
     blob.cache_control = cache_control
 

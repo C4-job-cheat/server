@@ -96,14 +96,21 @@ const createPersona = async (
     // HTML 파일 추가
     formData.append('html_file', htmlFile);
     
+    // AbortController를 사용하여 요청 취소 가능하게 설정
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5분 타임아웃
+    
     const response = await fetch('/api/personas/inputs/', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${idToken}`
         // Content-Type은 자동으로 설정됨 (multipart/form-data)
       },
-      body: formData
+      body: formData,
+      signal: controller.signal // 요청 취소 신호
     });
+    
+    clearTimeout(timeoutId); // 타임아웃 클리어
     
     if (!response.ok) {
       const errorData = await response.json();
@@ -114,8 +121,16 @@ const createPersona = async (
     console.log('생성된 페르소나:', result);
     return result;
   } catch (error) {
-    console.error('페르소나 생성 실패:', error);
-    throw error;
+    if (error.name === 'AbortError') {
+      console.error('요청이 취소되었습니다 (타임아웃 또는 사용자 취소)');
+      throw new Error('요청 시간이 초과되었습니다. 파일 크기를 확인하고 다시 시도해주세요.');
+    } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      console.error('네트워크 오류:', error);
+      throw new Error('네트워크 연결을 확인하고 다시 시도해주세요.');
+    } else {
+      console.error('페르소나 생성 실패:', error);
+      throw error;
+    }
   }
 };
 
@@ -257,6 +272,12 @@ const PersonaCreateForm: React.FC = () => {
       return;
     }
     
+    // 파일 크기 체크 (200MB 제한)
+    if (htmlFile.size > 200 * 1024 * 1024) {
+      alert('HTML 파일 크기는 200MB를 초과할 수 없습니다.');
+      return;
+    }
+    
     try {
       const idToken: string = await firebase.auth().currentUser.getIdToken();
       const personaData: PersonaData = {
@@ -267,11 +288,22 @@ const PersonaCreateForm: React.FC = () => {
         skills: formData.skills,
         certifications: formData.certifications.length > 0 ? formData.certifications : undefined
       };
+      
+      // 진행 상태 표시
+      setLoading(true);
+      setError(null);
+      
       const result: PersonaResponse = await createPersona(idToken, personaData, htmlFile);
       console.log('페르소나 생성 완료:', result);
+      
       // 성공 처리 (리다이렉트, 상태 업데이트 등)
+      alert('페르소나가 성공적으로 생성되었습니다!');
+      
     } catch (err) {
       console.error('페르소나 생성 실패:', err);
+      setError(err.message || '페르소나 생성에 실패했습니다.');
+    } finally {
+      setLoading(false);
     }
   };
   

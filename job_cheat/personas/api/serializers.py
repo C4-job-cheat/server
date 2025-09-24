@@ -27,7 +27,7 @@ class _CertificationListField(serializers.ListField):
 class PersonaInputSerializer(serializers.Serializer):
     """페르소나 기본 정보와 HTML 첨부 파일을 동시에 검증한다."""
 
-    MAX_HTML_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+    MAX_HTML_FILE_SIZE = 200 * 1024 * 1024  # 200MB (100MB 이상 처리 가능)
 
     id = serializers.CharField(read_only=True)
     user_id = serializers.CharField(read_only=True)
@@ -41,6 +41,11 @@ class PersonaInputSerializer(serializers.Serializer):
     html_file_path = serializers.CharField(read_only=True)
     html_content_type = serializers.CharField(read_only=True)
     html_file_size = serializers.IntegerField(read_only=True)
+    json_file_path = serializers.CharField(read_only=True)
+    json_content_type = serializers.CharField(read_only=True)
+    json_file_size = serializers.IntegerField(read_only=True)
+    conversations_count = serializers.IntegerField(read_only=True)
+    html_file_deleted = serializers.BooleanField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
 
@@ -84,8 +89,17 @@ class PersonaInputSerializer(serializers.Serializer):
         if content_type not in {"text/html", "application/xhtml+xml"}:
             raise serializers.ValidationError("HTML 파일만 업로드할 수 있습니다.")
         if value.size and value.size > self.MAX_HTML_FILE_SIZE:
-            raise serializers.ValidationError("HTML 파일은 최대 5MB까지 업로드할 수 있습니다.")
-        value.seek(0)
+            raise serializers.ValidationError(f"HTML 파일은 최대 {self.MAX_HTML_FILE_SIZE // (1024*1024)}MB까지 업로드할 수 있습니다.")
+        
+        # 대용량 파일의 경우 streaming 처리를 위해 파일 포인터를 처음으로 이동하지 않음
+        # (Django가 임시 파일로 저장하도록 함)
+        if value.size and value.size > 10 * 1024 * 1024:  # 10MB 이상
+            # 대용량 파일은 streaming으로 처리되므로 seek(0) 하지 않음
+            pass
+        else:
+            # 작은 파일은 메모리에서 처리
+            value.seek(0)
+            
         return value
 
     def to_firestore_payload(
@@ -127,6 +141,11 @@ class PersonaInputSerializer(serializers.Serializer):
                 "html_file_path": instance.get("html_file_path"),
                 "html_content_type": instance.get("html_content_type"),
                 "html_file_size": instance.get("html_file_size"),
+                "json_file_path": instance.get("json_file_path"),
+                "json_content_type": instance.get("json_content_type"),
+                "json_file_size": instance.get("json_file_size"),
+                "conversations_count": instance.get("conversations_count"),
+                "html_file_deleted": instance.get("html_file_deleted"),
                 "created_at": instance.get("created_at"),
                 "updated_at": instance.get("updated_at"),
             }
@@ -139,5 +158,7 @@ class PersonaInputSerializer(serializers.Serializer):
         file_obj = self.validated_data.get("html_file")
         if file_obj is None:
             raise AssertionError("html_file 필드가 존재하지 않습니다.")
-        file_obj.seek(0)
+        
+        # 파일 포인터 조작을 하지 않고 원본 파일 객체를 그대로 반환
+        # 업로드와 읽기는 각각 별도로 파일 포인터를 관리함
         return file_obj

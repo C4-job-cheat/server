@@ -14,7 +14,7 @@ from core.services.firebase_storage import (
     delete_persona_file,
     upload_persona_json,
 )
-from core.services.html_converter import HtmlConversionError, convert_html_to_json
+from core.services.chatgpt_converter import ChatGPTConversionError, convert_chatgpt_html_to_json
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +56,9 @@ def process_persona_html_to_json(
         raise ValueError("html_file_path 값이 필요합니다.")
     
     try:
-        # 1. HTML을 JSON으로 변환
+        # 1. HTML을 JSON으로 변환 (ChatGPT 변환기 사용)
         logger.info(f"HTML을 JSON으로 변환 시작: user_id={user_id}, document_id={document_id}")
-        json_content = convert_html_to_json(html_content)
+        json_content = convert_chatgpt_html_to_json(html_content, verbose=True)
         
         # 2. JSON을 Storage에 업로드
         logger.info(f"JSON 파일 업로드 시작: user_id={user_id}, document_id={document_id}")
@@ -77,15 +77,19 @@ def process_persona_html_to_json(
         
         logger.info(f"HTML 처리 완료: user_id={user_id}, document_id={document_id}")
         
+        # JSON 내용에서 대화 수 추출
+        json_data = json.loads(json_content)
+        conversations_count = json_data.get("total_conversations", 0)
+        
         return {
             "json_file_path": json_upload_result["path"],
             "json_content_type": json_upload_result["content_type"],
             "json_file_size": json_upload_result["size"],
             "html_file_deleted": delete_success,
-            "conversations_count": len(json.loads(json_content)) if json_content else 0,
+            "conversations_count": conversations_count,
         }
         
-    except HtmlConversionError as exc:
+    except ChatGPTConversionError as exc:
         logger.error(f"HTML 변환 실패: {exc}")
         raise PersonaHtmlProcessingError(f"HTML 변환 실패: {exc}") from exc
         
@@ -98,12 +102,16 @@ def process_persona_html_to_json(
         # 파일 삭제 실패는 치명적이지 않으므로 경고만 남기고 계속 진행
         logger.warning(f"HTML 파일 삭제 실패했지만 JSON 변환은 완료됨: {exc}")
         
+        # JSON 내용에서 대화 수 추출
+        json_data = json.loads(json_content)
+        conversations_count = json_data.get("total_conversations", 0)
+        
         return {
             "json_file_path": json_upload_result["path"],
             "json_content_type": json_upload_result["content_type"],
             "json_file_size": json_upload_result["size"],
             "html_file_deleted": False,
-            "conversations_count": len(json.loads(json_content)) if json_content else 0,
+            "conversations_count": conversations_count,
         }
         
     except Exception as exc:
