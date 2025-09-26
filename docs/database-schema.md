@@ -26,9 +26,15 @@ users/{userId}/personas/{personaId}
 ├── major: string | null                 // 🎓 전공 (선택사항)
 ├── skills: string[]                     // 🛠️ 보유 기술 스택 (선택사항, 빈 배열 허용)
 ├── certifications: string[]           // 🏆 자격증 및 인증서 (선택사항, 빈 배열 허용)
+├── core_competencies: object[]         // 🎯 직군별 핵심 역량 (job_category 기반 자동 설정)
 ├── html_file_path: string             // 📄 업로드된 HTML 파일 경로
 ├── html_content_type: string           // 📄 HTML 파일 MIME 타입
 ├── html_file_size: number              // 📄 HTML 파일 크기 (bytes)
+├── json_file_path: string              // 📄 변환된 JSON 파일 경로
+├── json_content_type: string           // 📄 JSON 파일 MIME 타입
+├── json_file_size: number              // 📄 JSON 파일 크기 (bytes)
+├── conversations_count: number          // 📄 대화 수
+├── html_file_deleted: boolean          // 📄 HTML 파일 삭제 여부
 ├── created_at: timestamp               // 📅 문서 생성 시각
 └── updated_at: timestamp               // 📅 최근 업데이트 시각
 ```
@@ -134,6 +140,8 @@ scraps/{scrapId}
 - 사용자 문서 하위에 페르소나 하위 컬렉션으로 계층적 구조
 - HTML 파일 업로드 기능 추가
 - 사용자별 여러 페르소나 생성 가능한 확장 가능한 구조
+- **직군별 핵심 역량 자동 설정**: `job_category` 기반으로 `core_competencies` 필드 자동 추가
+- JSON 변환 파일 정보 추가 (`json_file_path`, `json_content_type`, `json_file_size`, `conversations_count`, `html_file_deleted`)
 
 ## 📝 예시 데이터
 
@@ -142,7 +150,7 @@ scraps/{scrapId}
 ```json
 {
   "user_id": "firebase_uid_123",
-  "job_category": "개발자",
+  "job_category": "소프트웨어개발",
   "job_role": "백엔드 개발자",
   "school_name": "서울대학교",
   "major": "컴퓨터공학과",
@@ -157,9 +165,41 @@ scraps/{scrapId}
     "AWS Solutions Architect",
     "Django Professional"
   ],
+  "core_competencies": [
+    {
+      "id": "JG_07_C01",
+      "name": "문제 분해",
+      "description": "요구를 모듈·인터페이스로 구조화하는 역량"
+    },
+    {
+      "id": "JG_07_C02",
+      "name": "구현 역량",
+      "description": "언어·알고리즘을 활용해 기능을 정확히 구현하는 역량"
+    },
+    {
+      "id": "JG_07_C03",
+      "name": "디버깅",
+      "description": "재현·가설·검증 루프로 오류를 해결하는 역량"
+    },
+    {
+      "id": "JG_07_C04",
+      "name": "학습 지속성",
+      "description": "새로운 기술을 습득·적용하는 태도"
+    },
+    {
+      "id": "JG_07_C05",
+      "name": "협업 규범",
+      "description": "리뷰·커밋·이슈 관리를 준수하는 태도"
+    }
+  ],
   "html_file_path": "personas/user123/persona456/resume.html",
   "html_content_type": "text/html",
   "html_file_size": 2048576,
+  "json_file_path": "personas/user123/persona456/resume.json",
+  "json_content_type": "application/json",
+  "json_file_size": 1024000,
+  "conversations_count": 15,
+  "html_file_deleted": true,
   "created_at": "2025-01-27T10:30:45.123456Z",
   "updated_at": "2025-01-27T10:30:45.123456Z"
 }
@@ -169,15 +209,47 @@ scraps/{scrapId}
 ```json
 {
   "user_id": "firebase_uid_123",
-  "job_category": "디자이너",
+  "job_category": "디자인",
   "job_role": "",
   "school_name": "",
   "major": "",
   "skills": [],
   "certifications": [],
+  "core_competencies": [
+    {
+      "id": "JG_10_C01",
+      "name": "문제 해석",
+      "description": "사용자 문제와 제약을 정확히 읽어내는 역량"
+    },
+    {
+      "id": "JG_10_C02",
+      "name": "시각적 구현력",
+      "description": "아이디어를 시각적으로 명확히 구현하는 크래프트 역량"
+    },
+    {
+      "id": "JG_10_C03",
+      "name": "디자인 설명",
+      "description": "사용자·비즈니스 원리에 근거해 디자인을 설득하는 능력"
+    },
+    {
+      "id": "JG_10_C04",
+      "name": "일관성",
+      "description": "디자인 시스템·가이드를 일관 적용하는 태도"
+    },
+    {
+      "id": "JG_10_C05",
+      "name": "공감·창의성",
+      "description": "사용자 맥락을 반영해 새로운 해법을 제안하는 역량"
+    }
+  ],
   "html_file_path": "personas/user123/persona789/resume.html",
   "html_content_type": "text/html",
   "html_file_size": 1024000,
+  "json_file_path": "personas/user123/persona789/resume.json",
+  "json_content_type": "application/json",
+  "json_file_size": 512000,
+  "conversations_count": 8,
+  "html_file_deleted": true,
   "created_at": "2025-01-27T10:30:45.123456Z",
   "updated_at": "2025-01-27T10:30:45.123456Z"
 }

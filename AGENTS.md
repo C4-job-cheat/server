@@ -6,6 +6,7 @@
 - 코드 주석 한글로 작성
 - 이모지 및 한글 잘 표현되는 utf-8 인코딩 항상 유지
 
+
 ## 프로젝트 구조 및 모듈 구성
 - `job_cheat/`에는 Django 프로젝트 루트(`manage.py`, `pyproject.toml`, 공용 Firebase 구성 파일)가 위치한다.
 - `job_cheat/job_cheat/`에는 프로젝트 설정(`settings.py`), URL 라우팅, ASGI/WSGI 엔트리 포인트가 들어 있다. Django 데이터베이스 설정 대신 이곳에서 Firebase 자격 증명과 Firestore 클라이언트를 구성한다.

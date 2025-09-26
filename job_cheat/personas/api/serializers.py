@@ -5,6 +5,8 @@ from typing import Any, Dict, Iterable
 from django.core.files.uploadedfile import UploadedFile
 from rest_framework import serializers
 
+from core.services.job_competencies import get_core_competencies_by_job_category
+
 
 class _SkillListField(serializers.ListField):
     """쉼표 구분 문자열 입력을 허용하는 커스텀 리스트 필드."""
@@ -46,6 +48,7 @@ class PersonaInputSerializer(serializers.Serializer):
     json_file_size = serializers.IntegerField(read_only=True)
     conversations_count = serializers.IntegerField(read_only=True)
     html_file_deleted = serializers.BooleanField(read_only=True)
+    core_competencies = serializers.ListField(read_only=True)  # 직군별 핵심 역량
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
 
@@ -113,13 +116,20 @@ class PersonaInputSerializer(serializers.Serializer):
 
         if not self.is_valid():
             raise AssertionError("serializer가 유효성 검사를 통과한 뒤 호출해야 합니다.")
+        
+        job_category = self.validated_data["job_category"].strip()
+        
+        # 직군별 핵심 역량 조회
+        core_competencies = get_core_competencies_by_job_category(job_category)
+        
         return {
-            "job_category": self.validated_data["job_category"].strip(),
+            "job_category": job_category,
             "job_role": self.validated_data.get("job_role", "").strip() if self.validated_data.get("job_role") else "",
             "school_name": self.validated_data.get("school_name", "").strip() if self.validated_data.get("school_name") else "",
             "major": self.validated_data.get("major", "").strip() if self.validated_data.get("major") else "",
             "skills": self.validated_data.get("skills", []),
             "certifications": self.validated_data.get("certifications", []),
+            "core_competencies": core_competencies,  # 직군별 핵심 역량 추가
             "html_file_path": html_file_path,
             "html_content_type": html_content_type,
             "html_file_size": html_file_size,
@@ -146,6 +156,7 @@ class PersonaInputSerializer(serializers.Serializer):
                 "json_file_size": instance.get("json_file_size"),
                 "conversations_count": instance.get("conversations_count"),
                 "html_file_deleted": instance.get("html_file_deleted"),
+                "core_competencies": instance.get("core_competencies", []),
                 "created_at": instance.get("created_at"),
                 "updated_at": instance.get("updated_at"),
             }
