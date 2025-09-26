@@ -1,4 +1,0 @@
-1. 대용량 html 파일 장시간 업로드 이슈 해결
-2. chat.json 으로 llm 돌리기
-3. llm 돌린 것 기반으로 역량 .md 만들기
-4. chat.json 으로 vectorDB 활용한 RAG 구현

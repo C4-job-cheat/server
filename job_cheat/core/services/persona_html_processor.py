@@ -87,6 +87,7 @@ def process_persona_html_to_json(
             "json_file_size": json_upload_result["size"],
             "html_file_deleted": delete_success,
             "conversations_count": conversations_count,
+            "json_content": json_content,
         }
         
     except ChatGPTConversionError as exc:

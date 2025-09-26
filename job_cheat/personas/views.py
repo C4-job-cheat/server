@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import signal
 from uuid import uuid4
 
@@ -15,6 +15,8 @@ from rest_framework.views import APIView
 from core.authentication import FirebaseAuthentication
 from core.services.firebase_personas import (
     PersonaInputSaveError,
+    PersonaNotFoundError,
+    get_persona_document,
     save_user_persona_input,
 )
 from core.services.firebase_storage import (
@@ -27,7 +29,11 @@ from core.services.persona_html_processor import (
     PersonaHtmlProcessingError,
     process_persona_html_to_json,
 )
-from personas.api.serializers import PersonaInputSerializer
+from core.services.rag_embedding_job import enqueue_embedding_job
+from core.services import get_competency_evaluator
+from personas.api.serializers import (
+    PersonaInputSerializer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +204,13 @@ class PersonaInputCreateView(APIView):
                 html_content=html_content,
                 html_file_path=upload_result["path"],
             )
-            logger.info(f"HTML 처리 완료: JSON 파일={processing_result['json_file_path']}, JSON 크기={processing_result['json_file_size']} bytes, 대화 수={processing_result['conversations_count']}, HTML 삭제됨={processing_result['html_file_deleted']}")
+            logger.info(
+                "HTML 처리 완료: JSON 파일=%s, JSON 크기=%s bytes, 대화 수=%s, HTML 삭제됨=%s",
+                processing_result["json_file_path"],
+                processing_result["json_file_size"],
+                processing_result["conversations_count"],
+                processing_result["html_file_deleted"],
+            )
         except PersonaHtmlProcessingError as exc:
             logger.error(f"HTML 파일 처리 실패: {exc}")
             raise exceptions.APIException(f"HTML 파일 처리에 실패했습니다: {exc}") from exc
@@ -209,7 +221,8 @@ class PersonaInputCreateView(APIView):
             html_content_type=upload_result["content_type"],
             html_file_size=upload_result["size"],
         )
-        
+        core_competencies = payload.get("core_competencies", [])
+
         # JSON 파일 정보 추가
         payload.update({
             "json_file_path": processing_result["json_file_path"],
@@ -218,6 +231,18 @@ class PersonaInputCreateView(APIView):
             "conversations_count": processing_result["conversations_count"],
             "html_file_deleted": processing_result["html_file_deleted"],
         })
+
+        payload.update(
+            {
+                "embedding_status": "queued",
+                "embedding_message": "임베딩 작업이 대기열에 등록되었습니다.",
+                "embedding_error": None,
+                "embeddings_count": 0,
+                "has_embeddings": False,
+                "embedding_started_at": None,
+                "embedding_completed_at": None,
+            }
+        )
 
         logger.info(f"Firestore 저장할 페이로드: {payload}")
 
@@ -237,6 +262,17 @@ class PersonaInputCreateView(APIView):
         headers = {}
         if firestore_result.get("id"):
             headers["Location"] = f"/api/personas/inputs/{firestore_result['id']}"
+
+        try:
+            enqueue_embedding_job(
+                user_id=user_id,
+                persona_id=document_id,
+                competency_definitions=core_competencies,
+            )
+        except Exception as exc:  # pragma: no cover - 큐 등록 실패 로깅
+            logger.exception("임베딩 작업 큐 등록 실패")
+            firestore_result["embedding_status"] = "failed"
+            firestore_result["embedding_error"] = str(exc)
 
         logger.info(f"페르소나 입력 처리 완료: user_id={user_id}, document_id={document_id}")
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
@@ -311,3 +347,5 @@ class PersonaFileListView(APIView):
                 {"error": "파일 목록 조회에 실패했습니다: " + str(exc)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+

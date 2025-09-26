@@ -323,8 +323,17 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 # ASGI 관련 설정 (대용량 파일 처리용)
 ASGI_APPLICATION = 'job_cheat.asgi.application'
 
-# 비동기 처리 설정
-USE_ASYNC = True  # 비동기 처리 활성화
+# RAG 시스템 설정
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_EMBEDDING_MODEL = os.getenv('GEMINI_EMBEDDING_MODEL', 'text-embedding-004')
+GEMINI_TEXT_MODEL = os.getenv('GEMINI_TEXT_MODEL', 'gemini-1.5-pro')
+
+# 임베딩 설정
+EMBEDDING_DIMENSION = 768
+EMBEDDING_TASK_TYPE = 'RETRIEVAL_DOCUMENT'  # 문서 검색용
+
+# 벡터 DB 설정
+RAG_VECTOR_COLLECTION = 'user_vector_embeddings'
 
 # 로깅 설정 (Broken pipe 오류 처리)
 LOGGING = {

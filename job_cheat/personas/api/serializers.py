@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any, Dict, Iterable
 
@@ -48,6 +48,14 @@ class PersonaInputSerializer(serializers.Serializer):
     json_file_size = serializers.IntegerField(read_only=True)
     conversations_count = serializers.IntegerField(read_only=True)
     html_file_deleted = serializers.BooleanField(read_only=True)
+    embedding_status = serializers.CharField(read_only=True, required=False)
+    embedding_message = serializers.CharField(read_only=True, required=False)
+    embeddings_count = serializers.IntegerField(read_only=True, required=False)
+    embedding_model = serializers.CharField(read_only=True, required=False)
+    has_embeddings = serializers.BooleanField(read_only=True, required=False)
+    vectorized_competency_tags = serializers.ListField(child=serializers.CharField(), read_only=True, required=False)
+    embedding_started_at = serializers.DateTimeField(read_only=True, required=False)
+    embedding_completed_at = serializers.DateTimeField(read_only=True, required=False)
     core_competencies = serializers.ListField(read_only=True)  # 직군별 핵심 역량
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
@@ -156,6 +164,14 @@ class PersonaInputSerializer(serializers.Serializer):
                 "json_file_size": instance.get("json_file_size"),
                 "conversations_count": instance.get("conversations_count"),
                 "html_file_deleted": instance.get("html_file_deleted"),
+                "embedding_status": instance.get("embedding_status"),
+                "embedding_message": instance.get("embedding_message"),
+                "embeddings_count": instance.get("embeddings_count"),
+                "embedding_model": instance.get("embedding_model"),
+                "has_embeddings": instance.get("has_embeddings"),
+                "vectorized_competency_tags": instance.get("vectorized_competency_tags", []),
+                "embedding_started_at": instance.get("embedding_started_at"),
+                "embedding_completed_at": instance.get("embedding_completed_at"),
                 "core_competencies": instance.get("core_competencies", []),
                 "created_at": instance.get("created_at"),
                 "updated_at": instance.get("updated_at"),
@@ -173,3 +189,5 @@ class PersonaInputSerializer(serializers.Serializer):
         # 파일 포인터 조작을 하지 않고 원본 파일 객체를 그대로 반환
         # 업로드와 읽기는 각각 별도로 파일 포인터를 관리함
         return file_obj
+
+

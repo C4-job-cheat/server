@@ -18,3 +18,5 @@ ai-chatlog-converter/
 chat.html
 
 *.json
+
+.cursor/

@@ -1,17 +1,17 @@
-﻿from django.core.files.uploadedfile import SimpleUploadedFile
-from unittest.mock import patch
+from django.core.files.uploadedfile import SimpleUploadedFile
+from unittest.mock import patch, AsyncMock
 
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from core.services.firebase_personas import PersonaInputSaveError
+from core.services.firebase_personas import PersonaInputSaveError, PersonaNotFoundError
 from core.services.firebase_storage import PersonaHtmlUploadError
 
 
 class _DummyUser:
-    """force_authenticate에서 사용할 간단한 Firebase 사용자."""
+    """force_authenticate?ÂÃ¬ÂÂ ?Â¬Ã¬ÂÂ©??ÃªÂ°ÂÃ«ÂÂ¨??Firebase ?Â¬Ã¬ÂÂ©??"""
 
     def __init__(self, uid: str):
         self.uid = uid
@@ -22,7 +22,8 @@ class _DummyUser:
 
 
 class PersonaInputCreateViewTests(TestCase):
-    """페르소나 입력 생성 뷰 동작을 검증한다."""
+    """?ÂÃ«Â¥Â´?ÂÃ«ÂÂ ?Â
+Ã«Â Â¥ ?ÂÃ¬ÂÂ± Ã«Â·??ÂÃ¬ÂÂ??ÃªÂ²ÂÃ¬Â¦ÂÃ­ÂÂ??"""
 
     def setUp(self):
         self.client = APIClient()
@@ -30,11 +31,11 @@ class PersonaInputCreateViewTests(TestCase):
 
     def _build_payload(self, *, skills="React,TypeScript"):
         return {
-            "persona_name": "취업 전환 준비생",
-            "job_category": "프론트엔드",
-            "job_role": "시니어 프론트엔드 엔지니어",
-            "school_name": "서울대학교",
-            "major": "컴퓨터공학과",
+            "persona_name": "Sample Persona",
+            "job_category": "software",
+            "job_role": "backend engineer",
+            "school_name": "Sample University",
+            "major": "Computer Science",
             "skills": skills,
             "html_file": SimpleUploadedFile(
                 "profile.html",
@@ -49,11 +50,11 @@ class PersonaInputCreateViewTests(TestCase):
 
         firestore_result = {
             "id": "generated-id",
-            "persona_name": "취업 전환 준비생",
-            "job_category": "프론트엔드",
-            "job_role": "시니어 프론트엔드 엔지니어",
-            "school_name": "서울대학교",
-            "major": "컴퓨터공학과",
+            "persona_name": "Sample Persona",
+            "job_category": "software",
+            "job_role": "backend engineer",
+            "school_name": "Sample University",
+            "major": "Computer Science",
             "skills": ["React", "TypeScript"],
             "html_file_path": "personas/user-123/inputs/generated-id.html",
             "html_content_type": "text/html",
@@ -77,13 +78,16 @@ class PersonaInputCreateViewTests(TestCase):
         ) as mocked_process, patch(
             "personas.views.save_user_persona_input",
             return_value=firestore_result,
-        ) as mocked_save:
+        ) as mocked_save, patch(
+            "personas.views.enqueue_embedding_job"
+        ) as mocked_enqueue:
             response = self.client.post(self.url, data=self._build_payload(), format="multipart")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         mocked_upload.assert_called_once()
         mocked_process.assert_called_once()
         mocked_save.assert_called_once()
+        mocked_enqueue.assert_called_once()
         self.assertEqual(response.data["html_file_path"], firestore_result["html_file_path"])
         self.assertEqual(response["Location"], "/api/personas/inputs/generated-id")
 
@@ -123,8 +127,9 @@ class PersonaInputCreateViewTests(TestCase):
         ), patch(
             "personas.views.save_user_persona_input",
             side_effect=PersonaInputSaveError("boom"),
-        ):
+        ), patch("personas.views.enqueue_embedding_job"):
             response = self.client.post(self.url, data=self._build_payload(), format="multipart")
 
         self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
         self.assertIn("페르소나 입력을 저장할 수 없습니다", response.data["detail"])
+
