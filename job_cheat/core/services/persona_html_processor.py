@@ -73,7 +73,7 @@ def process_persona_html_to_json(
         delete_success = delete_persona_file(file_path=html_file_path)
         
         if not delete_success:
-            logger.warning(f"HTML 파일 삭제 실패 (파일이 존재하지 않을 수 있음): {html_file_path}")
+            logger.warning(f"HTML 파일 삭제 실패 (파일이 존재하지 않거나 오류 발생): {html_file_path}")
         
         logger.info(f"HTML 처리 완료: user_id={user_id}, document_id={document_id}")
         
@@ -96,23 +96,6 @@ def process_persona_html_to_json(
     except PersonaJsonUploadError as exc:
         logger.error(f"JSON 업로드 실패: {exc}")
         raise PersonaHtmlProcessingError(f"JSON 업로드 실패: {exc}") from exc
-        
-    except PersonaFileDeleteError as exc:
-        logger.error(f"HTML 파일 삭제 실패: {exc}")
-        # 파일 삭제 실패는 치명적이지 않으므로 경고만 남기고 계속 진행
-        logger.warning(f"HTML 파일 삭제 실패했지만 JSON 변환은 완료됨: {exc}")
-        
-        # JSON 내용에서 대화 수 추출
-        json_data = json.loads(json_content)
-        conversations_count = json_data.get("total_conversations", 0)
-        
-        return {
-            "json_file_path": json_upload_result["path"],
-            "json_content_type": json_upload_result["content_type"],
-            "json_file_size": json_upload_result["size"],
-            "html_file_deleted": False,
-            "conversations_count": conversations_count,
-        }
         
     except Exception as exc:
         logger.error(f"HTML 처리 중 예상치 못한 오류 발생: {exc}")

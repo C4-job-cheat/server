@@ -56,6 +56,14 @@ class ChatGPTToJSONConverter:
         # jsonData 끝점 찾기
         json_end = self.find_json_end(html_content, json_start)
         if json_end == -1:
+            # 디버깅 정보 추가
+            if self.verbose:
+                logger.error(f"jsonData 끝을 찾을 수 없습니다!")
+                logger.error(f"HTML 내용 길이: {len(html_content):,} 문자")
+                logger.error(f"jsonData 시작 위치: {json_start}")
+                logger.error(f"jsonData 시작 부분: {html_content[json_start:json_start+100]}...")
+                logger.error(f"HTML 끝 부분: ...{html_content[-200:]}")
+            
             raise ChatGPTConversionError("jsonData 끝을 찾을 수 없습니다!")
         
         if self.verbose:
@@ -86,18 +94,54 @@ class ChatGPTToJSONConverter:
         return result
         
     def find_json_end(self, content: str, start_pos: int) -> int:
-        """jsonData의 끝 위치를 찾습니다"""
+        """jsonData의 끝 위치를 찾습니다 (개선된 버전)"""
         bracket_count = 0
         pos = start_pos
+        in_string = False
+        escape_next = False
+        
+        # 'jsonData = [' 패턴을 찾아서 실제 배열 시작점으로 이동
+        json_array_start = content.find('[', start_pos)
+        if json_array_start == -1:
+            return -1
+        
+        pos = json_array_start
         
         while pos < len(content):
-            if content[pos] == '[':
-                bracket_count += 1
-            elif content[pos] == ']':
-                bracket_count -= 1
-                if bracket_count == 0:
-                    return pos + 1
+            char = content[pos]
+            
+            if escape_next:
+                escape_next = False
+                pos += 1
+                continue
+                
+            if char == '\\':
+                escape_next = True
+                pos += 1
+                continue
+                
+            if char == '"' and not escape_next:
+                in_string = not in_string
+            elif not in_string:
+                if char == '[':
+                    bracket_count += 1
+                elif char == ']':
+                    bracket_count -= 1
+                    if bracket_count == 0:
+                        return pos + 1
+            
             pos += 1
+        
+        # 끝을 찾지 못한 경우, 더 관대한 방법으로 시도
+        if self.verbose:
+            logger.warning("표준 방법으로 JSON 끝을 찾지 못함. 대안 방법 시도...")
+        
+        # 마지막 ']'를 찾아서 시도
+        last_bracket = content.rfind(']', start_pos)
+        if last_bracket != -1:
+            if self.verbose:
+                logger.warning(f"마지막 ']' 위치 사용: {last_bracket}")
+            return last_bracket + 1
         
         return -1
     

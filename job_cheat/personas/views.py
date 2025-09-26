@@ -20,6 +20,8 @@ from core.services.firebase_personas import (
 from core.services.firebase_storage import (
     PersonaHtmlUploadError,
     upload_persona_html,
+    download_persona_json,
+    list_user_persona_files,
 )
 from core.services.persona_html_processor import (
     PersonaHtmlProcessingError,
@@ -86,12 +88,12 @@ class PersonaInputCreateView(APIView):
     @handle_broken_pipe
     def post(self, request):
         """
-        사용자의 페르소나 데이터와 HTML 파일을 받아서 처리합니다.
+        사용자의 페르소나 데이터와 HTML 파일을 받아서 처리합니다. (최대 200MB 지원)
         
         처리 과정:
-        1. HTML 파일을 Firebase Storage에 업로드 (users/{uid}/html/{uid}.html)
+        1. HTML 파일을 Firebase Storage에 업로드 (users/{uid}/html/{document_id}.html)
         2. ChatGPT 변환기를 사용하여 HTML을 JSON으로 변환
-        3. JSON 파일을 Firebase Storage에 저장 (users/{uid}/json/{uid}.json)
+        3. JSON 파일을 Firebase Storage에 저장 (users/{uid}/json/{document_id}.json)
         4. 원본 HTML 파일 삭제
         5. Firestore에 메타데이터 저장 (users/{uid}/personas/{personaId})
         """
@@ -104,6 +106,17 @@ class PersonaInputCreateView(APIView):
             # _stream이 Empty 타입이거나 closed 속성이 없는 경우 무시
             logger.debug(f"연결 상태 확인 중 예상된 오류 (무시): {e}")
             pass
+        
+        # 요청 데이터 크기 확인 및 로깅
+        content_length = request.META.get('CONTENT_LENGTH', 0)
+        if content_length:
+            file_size_mb = int(content_length) / 1024 / 1024
+            logger.info(f"요청 데이터 크기: {content_length} bytes ({file_size_mb:.2f} MB)")
+            
+            # 200MB 제한 확인
+            if file_size_mb > 200:
+                raise exceptions.APIException("파일 크기가 200MB를 초과합니다.")
+        
         serializer = PersonaInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -227,3 +240,74 @@ class PersonaInputCreateView(APIView):
 
         logger.info(f"페르소나 입력 처리 완료: user_id={user_id}, document_id={document_id}")
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class PersonaJsonDownloadView(APIView):
+    """페르소나 JSON 파일 다운로드 뷰"""
+    
+    authentication_classes = [FirebaseAuthentication]
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, document_id):
+        """특정 JSON 파일을 다운로드합니다."""
+        try:
+            user_id = request.user.uid
+            
+            # JSON 파일 다운로드
+            result = download_persona_json(
+                user_id=user_id,
+                document_id=document_id,
+            )
+            
+            if not result["exists"]:
+                return Response(
+                    {"error": "JSON 파일을 찾을 수 없습니다."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            
+            return Response({
+                "success": True,
+                "document_id": document_id,
+                "file_path": result["path"],
+                "file_size": result["size"],
+                "content_type": result["content_type"],
+                "json_content": result["content"],
+            })
+            
+        except Exception as exc:
+            logger.exception("JSON 파일 다운로드 실패")
+            return Response(
+                {"error": "JSON 파일 다운로드에 실패했습니다: " + str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PersonaFileListView(APIView):
+    """사용자의 페르소나 파일 목록 조회 뷰"""
+    
+    authentication_classes = [FirebaseAuthentication]
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """사용자의 모든 페르소나 파일 목록을 조회합니다."""
+        try:
+            user_id = request.user.uid
+            
+            # 파일 목록 조회
+            result = list_user_persona_files(user_id=user_id)
+            
+            return Response({
+                "success": True,
+                "user_id": user_id,
+                "html_files": result["html_files"],
+                "json_files": result["json_files"],
+                "total_html_files": result["total_html_files"],
+                "total_json_files": result["total_json_files"],
+            })
+            
+        except Exception as exc:
+            logger.exception("파일 목록 조회 실패")
+            return Response(
+                {"error": "파일 목록 조회에 실패했습니다: " + str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

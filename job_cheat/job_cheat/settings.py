@@ -298,17 +298,33 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 
-# 파일 업로드 관련 설정 (대용량 파일 streaming 처리)
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB (메모리에 올리지 않고 임시 파일로 저장)
-FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB (메모리에 올리지 않고 임시 파일로 저장)
+# 파일 업로드 관련 설정 (200MB 대용량 파일 streaming 처리)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024  # 200MB (메모리에 올리지 않고 임시 파일로 저장)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024  # 200MB (메모리에 올리지 않고 임시 파일로 저장)
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000  # 폼 필드 수 제한
 
 # 대용량 파일 처리를 위한 임시 파일 설정
 FILE_UPLOAD_TEMP_DIR = None  # 시스템 기본 임시 디렉토리 사용
 FILE_UPLOAD_PERMISSIONS = 0o644  # 임시 파일 권한
 
-# 요청 타임아웃 설정 (대용량 파일 처리용)
-REQUEST_TIMEOUT = 300  # 5분
+# 요청 타임아웃 설정 (200MB 파일 처리용)
+REQUEST_TIMEOUT = 1800  # 30분 (200MB 파일 처리 시간 확보)
+
+# 대용량 파일 업로드를 위한 추가 설정 (임시 파일 우선 사용)
+FILE_UPLOAD_HANDLERS = [
+    'django.core.files.uploadhandler.TemporaryFileUploadHandler',
+    'django.core.files.uploadhandler.MemoryFileUploadHandler',
+]
+
+# 세션 타임아웃 설정 (대용량 파일 업로드 중 세션 만료 방지)
+SESSION_COOKIE_AGE = 7200  # 2시간 (200MB 파일 업로드 시간 고려)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# ASGI 관련 설정 (대용량 파일 처리용)
+ASGI_APPLICATION = 'job_cheat.asgi.application'
+
+# 비동기 처리 설정
+USE_ASYNC = True  # 비동기 처리 활성화
 
 # 로깅 설정 (Broken pipe 오류 처리)
 LOGGING = {

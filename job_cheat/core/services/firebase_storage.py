@@ -23,6 +23,14 @@ class PersonaFileDeleteError(RuntimeError):
     """페르소나 파일 삭제 중 발생한 예외."""
 
 
+class PersonaJsonDownloadError(RuntimeError):
+    """페르소나 JSON 파일 다운로드 중 발생한 예외."""
+
+
+class PersonaFileListError(RuntimeError):
+    """페르소나 파일 목록 조회 중 발생한 예외."""
+
+
 def _resolve_bucket(bucket=None):
     """Firebase Storage 버킷 인스턴스를 가져온다."""
 
@@ -54,8 +62,8 @@ def upload_persona_html(
         raise ValueError("document_id 값이 필요합니다.")
 
     bucket_instance = _resolve_bucket(bucket=bucket)
-    # 요구사항에 따라 userid 기반으로 HTML 파일 저장
-    blob_path = f"users/{user_id}/html/{user_id}.html"
+    # 요구사항에 따라 userid 기반으로 HTML 파일 저장 (document_id 사용)
+    blob_path = f"users/{user_id}/html/{document_id}.html"
     blob = bucket_instance.blob(blob_path)
     blob.cache_control = cache_control
 
@@ -99,8 +107,8 @@ def upload_persona_json(
         raise ValueError("json_content 값이 필요합니다.")
 
     bucket_instance = _resolve_bucket(bucket=bucket)
-    # 요구사항에 따라 userid.json으로 저장
-    blob_path = f"users/{user_id}/json/{user_id}.json"
+    # 요구사항에 따라 userid.json으로 저장 (document_id 사용)
+    blob_path = f"users/{user_id}/json/{document_id}.json"
     blob = bucket_instance.blob(blob_path)
     blob.cache_control = cache_control
 
@@ -139,5 +147,109 @@ def delete_persona_file(
         return False
     except (gcloud_exceptions.GoogleCloudError, Exception) as exc:
         logger.exception("Firebase Storage 파일 삭제 실패", extra={"file_path": file_path})
-        raise PersonaFileDeleteError(str(exc)) from exc
+        # 예외를 발생시키지 않고 False를 반환하여 프로세스를 계속 진행
+        return False
+
+
+def download_persona_json(
+    *,
+    user_id: str,
+    document_id: str,
+    bucket=None,
+) -> Dict[str, Any]:
+    """Storage에서 JSON 파일을 다운로드하고 내용을 반환한다."""
+    
+    if not user_id:
+        raise ValueError("user_id 값이 필요합니다.")
+    if not document_id:
+        raise ValueError("document_id 값이 필요합니다.")
+    
+    bucket_instance = _resolve_bucket(bucket=bucket)
+    blob_path = f"users/{user_id}/json/{document_id}.json"
+    blob = bucket_instance.blob(blob_path)
+    
+    try:
+        # 파일 존재 여부 확인
+        if not blob.exists():
+            logger.warning(f"JSON 파일을 찾을 수 없음: {blob_path}")
+            return {
+                "exists": False,
+                "path": blob_path,
+                "content": None,
+                "size": 0,
+                "content_type": None,
+            }
+        
+        # 파일 내용 다운로드
+        json_content = blob.download_as_text()
+        
+        logger.info(f"JSON 파일 다운로드 성공: {blob_path}")
+        
+        return {
+            "exists": True,
+            "path": blob_path,
+            "content": json_content,
+            "size": blob.size,
+            "content_type": blob.content_type,
+        }
+        
+    except (gcloud_exceptions.GoogleCloudError, Exception) as exc:
+        logger.exception("Firebase Storage JSON 다운로드 실패", extra={"user_id": user_id, "document_id": document_id})
+        raise PersonaJsonDownloadError(str(exc)) from exc
+
+
+def list_user_persona_files(
+    *,
+    user_id: str,
+    bucket=None,
+) -> Dict[str, Any]:
+    """사용자의 모든 페르소나 파일 목록을 반환한다."""
+    
+    if not user_id:
+        raise ValueError("user_id 값이 필요합니다.")
+    
+    bucket_instance = _resolve_bucket(bucket=bucket)
+    
+    try:
+        # HTML 파일 목록
+        html_prefix = f"users/{user_id}/html/"
+        html_blobs = list(bucket_instance.list_blobs(prefix=html_prefix))
+        
+        # JSON 파일 목록
+        json_prefix = f"users/{user_id}/json/"
+        json_blobs = list(bucket_instance.list_blobs(prefix=json_prefix))
+        
+        html_files = []
+        for blob in html_blobs:
+            html_files.append({
+                "name": blob.name,
+                "size": blob.size,
+                "content_type": blob.content_type,
+                "created": blob.time_created,
+                "updated": blob.updated,
+            })
+        
+        json_files = []
+        for blob in json_blobs:
+            json_files.append({
+                "name": blob.name,
+                "size": blob.size,
+                "content_type": blob.content_type,
+                "created": blob.time_created,
+                "updated": blob.updated,
+            })
+        
+        logger.info(f"사용자 파일 목록 조회 성공: user_id={user_id}, HTML={len(html_files)}개, JSON={len(json_files)}개")
+        
+        return {
+            "user_id": user_id,
+            "html_files": html_files,
+            "json_files": json_files,
+            "total_html_files": len(html_files),
+            "total_json_files": len(json_files),
+        }
+        
+    except (gcloud_exceptions.GoogleCloudError, Exception) as exc:
+        logger.exception("Firebase Storage 파일 목록 조회 실패", extra={"user_id": user_id})
+        raise PersonaFileListError(str(exc)) from exc
 
