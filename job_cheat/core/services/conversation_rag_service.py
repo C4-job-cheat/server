@@ -288,16 +288,3 @@ async def get_rag_context(query: str, user_id: str, top_k: int = 5) -> str:
     """RAG 검색을 통해 관련 컨텍스트를 조회합니다."""
     service = ConversationRAGService()
     return await service.get_rag_context(query, user_id, top_k)
-
-
-# 싱글턴 인스턴스
-_conversation_rag_service_instance: Optional[ConversationRAGService] = None
-
-
-def get_conversation_rag_service() -> ConversationRAGService:
-    """Conversation RAG 서비스 싱글턴을 반환합니다."""
-    global _conversation_rag_service_instance
-    if _conversation_rag_service_instance is None:
-        _conversation_rag_service_instance = ConversationRAGService()
-        logger.info("Conversation RAG 서비스 인스턴스 생성")
-    return _conversation_rag_service_instance
