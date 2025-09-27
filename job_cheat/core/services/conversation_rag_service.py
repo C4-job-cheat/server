@@ -217,7 +217,7 @@ class ConversationRAGService:
             # 1. 검색 단계: 쿼리 임베딩 및 유사도 검색
             query_embeddings = await self.cohere_service.embed_texts(
                 [query],
-                model=self.cohere_service._default_model,
+                model="embed-multilingual-v3.0",
                 input_type="search_query"
             )
             

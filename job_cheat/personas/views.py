@@ -1,5 +1,6 @@
 import logging
 import signal
+from typing import Dict, List
 from uuid import uuid4
 
 from django.http import HttpResponse
@@ -29,13 +30,61 @@ from core.services.persona_html_processor import (
     PersonaHtmlProcessingError,
     process_persona_html_to_json,
 )
-from core.services.rag_embedding_job import enqueue_embedding_job
+from core.services.conversation_rag_embedding_job import enqueue_conversation_rag_job
 from core.services import get_competency_evaluator
 from personas.api.serializers import (
     PersonaInputSerializer,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _convert_competencies_for_evaluation(core_competencies: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """
+    핵심 역량을 역량 평가 형식으로 변환합니다.
+    
+    Args:
+        core_competencies: 직군별 핵심 역량 목록
+        
+    Returns:
+        역량 평가용 형식으로 변환된 역량 목록
+    """
+    if not core_competencies:
+        return []
+    
+    # 역량 평가용 쿼리 매핑
+    competency_query_mapping = {
+        "문제정의": "문제 정의 및 분석 능력",
+        "데이터분석": "데이터 분석 및 해석 능력", 
+        "사용자경험": "사용자 경험 설계 및 개선 능력",
+        "기획력": "기획 및 전략 수립 능력",
+        "커뮤니케이션": "커뮤니케이션 및 협업 능력",
+        "리더십": "리더십 및 팀 관리 능력",
+        "프로젝트관리": "프로젝트 관리 및 실행 능력",
+        "문제해결": "문제 해결 및 창의적 사고 능력",
+        "기술이해": "기술 이해 및 활용 능력",
+        "비즈니스이해": "비즈니스 이해 및 전략적 사고 능력"
+    }
+    
+    converted_competencies = []
+    
+    for competency in core_competencies:
+        competency_name = competency.get('name', '')
+        competency_description = competency.get('description', '')
+        
+        # 역량명을 기반으로 쿼리 생성
+        query = competency_query_mapping.get(competency_name, f"{competency_name} 역량")
+        
+        converted_competency = {
+            'name': competency_name,
+            'description': competency_description,
+            'query': query
+        }
+        
+        converted_competencies.append(converted_competency)
+    
+    logger.info(f"역량 평가용 형식으로 변환 완료: {len(converted_competencies)}개")
+    return converted_competencies
 
 
 def handle_broken_pipe(func):
@@ -264,13 +313,16 @@ class PersonaInputCreateView(APIView):
             headers["Location"] = f"/api/personas/inputs/{firestore_result['id']}"
 
         try:
-            enqueue_embedding_job(
+            # 역량 정의를 역량 평가 형식으로 변환
+            competency_definitions = _convert_competencies_for_evaluation(core_competencies)
+            
+            enqueue_conversation_rag_job(
                 user_id=user_id,
                 persona_id=document_id,
-                competency_definitions=core_competencies,
+                competency_definitions=competency_definitions,
             )
         except Exception as exc:  # pragma: no cover - 큐 등록 실패 로깅
-            logger.exception("임베딩 작업 큐 등록 실패")
+            logger.exception("대화 RAG 임베딩 작업 큐 등록 실패")
             firestore_result["embedding_status"] = "failed"
             firestore_result["embedding_error"] = str(exc)
 

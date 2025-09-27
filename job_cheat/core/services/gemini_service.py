@@ -42,7 +42,7 @@ class GeminiService:
         self,
         prompt: str,
         *,
-        response_format: str = "text",
+        response_format: str = "json",
     ) -> str:
         """프롬프트를 Gemini 모델에 전달해 응답을 반환한다."""
 
@@ -51,7 +51,22 @@ class GeminiService:
 
         def _call_model() -> str:
             try:
-                result = self._generative_model.generate_content(prompt)
+                if response_format == "json":
+                    # JSON 형식으로 응답하도록 강화된 프롬프트
+                    json_prompt = f"""
+{prompt}
+
+중요: 위 요청에 대해 반드시 유효한 JSON 형식으로만 응답해주세요.
+- 다른 설명이나 마크다운 코드 블록(```json)은 절대 포함하지 마세요.
+- JSON 객체만 반환해주세요.
+- 응답은 반드시 {{로 시작하고 }}로 끝나야 합니다.
+- 모든 문자열 값은 반드시 따옴표로 감싸주세요.
+- 응답에는 오직 JSON 데이터만 포함하고 다른 텍스트는 포함하지 마세요.
+"""
+                else:
+                    json_prompt = prompt
+                
+                result = self._generative_model.generate_content(json_prompt)
             except Exception as exc:  # pragma: no cover - 외부 API 오류 래핑
                 logger.error("Gemini 텍스트 생성 실패: %s", exc)
                 raise GeminiServiceError(f"Gemini 텍스트 생성 실패: {exc}") from exc
@@ -70,10 +85,58 @@ class GeminiService:
             return text
 
         response = await sync_to_async(_call_model, thread_sensitive=True)()
-
+        
+        # JSON 형식인 경우 후처리 수행
         if response_format == "json":
-            return response
+            response = self._clean_json_response(response)
+        
         return response
+    
+    def _clean_json_response(self, response: str) -> str:
+        """JSON 응답을 정리하여 순수 JSON만 반환합니다."""
+        import re
+        import json
+        
+        # 마크다운 코드 블록 제거
+        cleaned = response.strip()
+        
+        # ```json으로 시작하는 경우
+        if cleaned.startswith('```json'):
+            cleaned = cleaned[7:]  # ```json 제거
+        elif cleaned.startswith('```'):
+            cleaned = cleaned[3:]  # ``` 제거
+        
+        # ```로 끝나는 경우
+        if cleaned.endswith('```'):
+            cleaned = cleaned[:-3]  # ``` 제거
+        
+        # JSON 객체만 추출 (첫 번째 {부터 마지막 }까지)
+        json_match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+        if json_match:
+            cleaned = json_match.group(0)
+        
+        # 제어 문자 제거 및 이스케이프 처리
+        cleaned = self._sanitize_json_string(cleaned)
+        
+        return cleaned.strip()
+    
+    def _sanitize_json_string(self, json_str: str) -> str:
+        """JSON 문자열에서 제어 문자를 안전하게 처리합니다."""
+        import json
+        
+        try:
+            # 먼저 JSON 파싱을 시도하여 유효성 검사
+            json.loads(json_str)
+            return json_str
+        except json.JSONDecodeError:
+            # 제어 문자를 이스케이프 처리
+            sanitized = json_str.replace('\t', '\\t').replace('\n', '\\n').replace('\r', '\\r')
+            
+            # 추가적인 제어 문자 처리
+            sanitized = ''.join(char if ord(char) >= 32 or char in '\t\n\r' else f'\\u{ord(char):04x}' 
+                               for char in sanitized)
+            
+            return sanitized
 
     async def generate_embeddings_batch(
         self,
