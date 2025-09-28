@@ -310,7 +310,8 @@ def get_job_detail_with_recommendation(user_id: str, persona_id: str, job_postin
         
         if not cover_letter_preview:
             logger.info(f"⚠️  자기소개서 미리보기가 없음. LLM으로 생성 중...")
-            cover_letter_result = generate_cover_letter_preview_with_llm(persona_data, job_data)
+            import asyncio
+            cover_letter_result = asyncio.run(generate_cover_letter_preview_with_llm(persona_data, job_data))
             
             if cover_letter_result['success']:
                 logger.info(f"✅ 자기소개서 미리보기 생성 완료")
@@ -356,7 +357,7 @@ def get_job_detail_with_recommendation(user_id: str, persona_id: str, job_postin
         }
 
 
-def generate_cover_letter_preview_with_llm(persona_data: dict, job_data: dict) -> dict:
+async def generate_cover_letter_preview_with_llm(persona_data: dict, job_data: dict) -> dict:
     """
     페르소나 데이터와 공고 데이터를 기반으로 자기소개서 미리보기를 생성합니다.
     
@@ -428,7 +429,9 @@ def generate_cover_letter_preview_with_llm(persona_data: dict, job_data: dict) -
         
         # LLM 호출
         logger.info(f"📤 Gemini API 호출 중...")
-        response = gemini_service.generate_text(prompt)
+        response = await gemini_service.generate_structured_response(
+            prompt, response_format="text"
+        )
         
         if response and response.strip():
             logger.info(f"✅ 자기소개서 미리보기 생성 완료")
