@@ -1,7 +1,11 @@
 import os
+import logging
 from firebase_admin import firestore
 from sentence_transformers import SentenceTransformer
 from pinecone import Pinecone
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def preprocess_persona_to_text(persona_data: dict) -> str:
@@ -84,16 +88,39 @@ def find_matching_jobs(persona_data: dict) -> list:
     Returns:
         list: 매칭된 공고 리스트 (유사도 점수와 메타데이터 포함)
     """
+    logger.info(f"🔍 매칭 공고 검색 시작")
+    logger.info(f"   💼 직군: {persona_data.get('job_category', 'N/A')}")
+    logger.info(f"   🎯 직무: {persona_data.get('job_role', 'N/A')}")
+    
     # 1. 페르소나 데이터를 평문 텍스트로 변환
+    logger.info(f"📝 페르소나 데이터를 텍스트로 변환 중...")
     persona_text = preprocess_persona_to_text(persona_data)
+    logger.info(f"✅ 변환 완료 - 텍스트 길이: {len(persona_text)}자")
     
     # 2. SentenceTransformer 모델 로드 및 벡터화
-    model = SentenceTransformer('jhgan/ko-sroberta-multitask')
-    persona_vector = model.encode(persona_text).tolist()
+    logger.info(f"🤖 SentenceTransformer 모델 로드 중...")
+    try:
+        model = SentenceTransformer('jhgan/ko-sroberta-multitask')
+        persona_vector = model.encode(persona_text).tolist()
+        logger.info(f"✅ 벡터화 완료 - 차원: {len(persona_vector)}")
+    except Exception as e:
+        logger.error(f"❌ SentenceTransformer 로드 실패: {e}")
+        return []
     
     # 3. Pinecone 클라이언트 초기화
-    pinecone = Pinecone(api_key=os.getenv('PINECONE_API_KEY'))
-    index = pinecone.Index('job-postings')
+    logger.info(f"🌲 Pinecone 클라이언트 초기화 중...")
+    pinecone_api_key = os.getenv('PINECONE_API_KEY')
+    if not pinecone_api_key:
+        logger.error(f"❌ PINECONE_API_KEY가 설정되지 않았습니다.")
+        return []
+    
+    try:
+        pinecone = Pinecone(api_key=pinecone_api_key)
+        index = pinecone.Index('job-postings')
+        logger.info(f"✅ Pinecone 초기화 완료")
+    except Exception as e:
+        logger.error(f"❌ Pinecone 초기화 실패: {e}")
+        return []
     
     # 4. 필터 조건 설정 (페르소나의 직군/직무 기준)
     filter_conditions = {
@@ -104,22 +131,36 @@ def find_matching_jobs(persona_data: dict) -> list:
     if persona_data.get('job_role'):
         filter_conditions["title"] = {"$eq": persona_data.get('job_role')}
     
+    logger.info(f"🔧 필터 조건 설정:")
+    logger.info(f"   📋 카테고리: {filter_conditions.get('category', {}).get('$eq', 'N/A')}")
+    logger.info(f"   📋 직무: {filter_conditions.get('title', {}).get('$eq', 'N/A')}")
+    
     # 5. Pinecone에서 유사도 검색
-    search_results = index.query(
-        vector=persona_vector,
-        filter=filter_conditions,
-        top_k=50,
-        include_metadata=True
-    )
+    logger.info(f"🔍 Pinecone에서 유사도 검색 중...")
+    try:
+        search_results = index.query(
+            vector=persona_vector,
+            filter=filter_conditions,
+            top_k=50,
+            include_metadata=True
+        )
+        matches_count = len(search_results.get('matches', []))
+        logger.info(f"✅ Pinecone 검색 완료 - {matches_count}개 결과 발견")
+    except Exception as e:
+        logger.error(f"❌ Pinecone 검색 실패: {e}")
+        return []
     
     # 6. 결과 포맷팅
+    logger.info(f"📊 검색 결과 포맷팅 중...")
     matching_jobs = []
-    for match in search_results['matches']:
+    for i, match in enumerate(search_results['matches'], 1):
         matching_jobs.append({
             'firestore_id': match['metadata']['firestore_id'],
             'similarity_score': round(match['score'], 4),
         })
+        logger.info(f"   📄 공고 {i}: ID={match['metadata']['firestore_id']}, 유사도={round(match['score'], 4)}")
     
+    logger.info(f"🎉 매칭 공고 검색 완료 - {len(matching_jobs)}개 공고 반환")
     return matching_jobs
 
 
@@ -229,19 +270,32 @@ def save_persona_recommendations_score(user_id: str, persona_id: str) -> dict:
         dict: 추천 저장 결과
     """
     try:
+        logger.info(f"🚀 추천 공고 생성 시작")
+        logger.info(f"   👤 user_id: {user_id}")
+        logger.info(f"   📋 persona_id: {persona_id}")
+        
         # 유사도 점수 기준 설정 (이 기준을 통과한 공고들만 스킬 점수 계산)
-        min_similarity_score = 0.5
+        min_similarity_score = 0.1
         # 최종 점수 기준 설정
-        min_final_score = 0.6
+        min_final_score = 0.1
+        logger.info(f"📊 점수 기준 설정")
+        logger.info(f"   🎯 유사도 최소 점수: {min_similarity_score}")
+        logger.info(f"   🎯 최종 최소 점수: {min_final_score}")
         
         # 1. Firestore에서 페르소나 데이터 가져오기
+        logger.info(f"👤 페르소나 데이터 조회 중...")
         persona_data = get_persona_from_firestore(user_id, persona_id)
         persona_skills = persona_data.get('skills', [])
+        logger.info(f"✅ 페르소나 데이터 조회 완료")
+        logger.info(f"   🛠️  보유 스킬: {persona_skills}")
         
         # 2. 매칭된 공고 찾기
+        logger.info(f"🔍 매칭된 공고 검색 중...")
         matching_jobs = find_matching_jobs(persona_data)
+        logger.info(f"✅ 매칭된 공고 검색 완료: {len(matching_jobs)}개")
         
         if not matching_jobs:
+            logger.warning(f"⚠️  매칭된 공고가 없습니다.")
             return {
                 'success': True,
                 'message': '매칭된 공고가 없어서 저장할 데이터가 없습니다.',
@@ -250,8 +304,11 @@ def save_persona_recommendations_score(user_id: str, persona_id: str) -> dict:
         
         # 3. 유사도 점수 기준을 통과한 공고들만 필터링
         similarity_filtered_jobs = [job for job in matching_jobs if job['similarity_score'] >= min_similarity_score]
+        logger.info(f"🔧 유사도 필터링 완료")
+        logger.info(f"   📈 통과한 공고: {len(similarity_filtered_jobs)}개 (기준: {min_similarity_score})")
         
         if not similarity_filtered_jobs:
+            logger.warning(f"⚠️  유사도 기준을 통과한 공고가 없습니다.")
             return {
                 'success': True,
                 'message': f'유사도 점수 {min_similarity_score} 이상인 공고가 없어서 저장할 데이터가 없습니다.',
@@ -259,8 +316,11 @@ def save_persona_recommendations_score(user_id: str, persona_id: str) -> dict:
             }
         
         # 4. 유사도 기준을 통과한 공고들에 대해서만 skill 점수와 최종 점수 계산
+        logger.info(f"🧮 스킬 점수 및 최종 점수 계산 중...")
         enhanced_jobs = []
-        for job in similarity_filtered_jobs:
+        for i, job in enumerate(similarity_filtered_jobs, 1):
+            logger.info(f"   📄 공고 {i}/{len(similarity_filtered_jobs)} 처리 중: {job['firestore_id']}")
+            
             # 공고의 requirements와 preferred 가져오기
             job_details = get_job_requirements_and_preferred(job['firestore_id'])
             
@@ -274,6 +334,8 @@ def save_persona_recommendations_score(user_id: str, persona_id: str) -> dict:
             # 최종 점수 계산
             final_score = calculate_final_score(job['similarity_score'], skill_score)
             
+            logger.info(f"      📊 유사도: {job['similarity_score']:.3f}, 스킬: {skill_score:.3f}, 최종: {final_score:.3f}")
+            
             enhanced_jobs.append({
                 'firestore_id': job['firestore_id'],
                 'similarity_score': job['similarity_score'],
@@ -282,27 +344,27 @@ def save_persona_recommendations_score(user_id: str, persona_id: str) -> dict:
             })
         
         # 5. 최종 점수 min_final_score 이상인 공고만 필터링
+        logger.info(f"🔧 최종 점수 필터링 중...")
         filtered_jobs = [job for job in enhanced_jobs if job['final_score'] >= min_final_score]
+        logger.info(f"✅ 최종 필터링 완료: {len(filtered_jobs)}개 (기준: {min_final_score})")
         
         if not filtered_jobs:
+            logger.warning(f"⚠️  최종 점수 기준을 통과한 공고가 없습니다.")
             return {
                 'success': True,
                 'message': f'최종 점수 {min_final_score} 이상인 공고가 없어서 저장할 데이터가 없습니다.',
                 'saved_count': 0
             }
         
-        # 5. Firestore에 추천 데이터 저장
+        # 6. Firestore에 추천 데이터 저장
+        logger.info(f"💾 Firestore에 추천 데이터 저장 중...")
         db = firestore.client()
         recommendations_ref = db.collection('users').document(user_id).collection('personas').document(persona_id).collection('recommendations')
-        
-        # 기존 문서들 삭제
-        existing_docs = recommendations_ref.stream()
-        for doc in existing_docs:
-            doc.reference.delete()
-        
+
         # 새로운 추천 데이터 저장
         saved_count = 0
-        for job in filtered_jobs:
+        for i, job in enumerate(filtered_jobs, 1):
+            logger.info(f"   💾 추천 {i}/{len(filtered_jobs)} 저장 중: {job['firestore_id']}")
             recommendation_data = {
                 'job_posting_id': job['firestore_id'],
                 'recommendation_score': round(job['final_score'] * 100),
@@ -315,6 +377,11 @@ def save_persona_recommendations_score(user_id: str, persona_id: str) -> dict:
             
             recommendations_ref.add(recommendation_data)
             saved_count += 1
+            logger.info(f"      ✅ 저장 완료: 점수={round(job['final_score'] * 100)}")
+        
+        logger.info(f"🎉 추천 공고 생성 완료!")
+        logger.info(f"   📊 저장된 추천: {saved_count}개")
+        logger.info(f"   🎯 최종 점수 기준: {min_final_score}")
         
         return {
             'success': True,
@@ -324,6 +391,9 @@ def save_persona_recommendations_score(user_id: str, persona_id: str) -> dict:
         }
         
     except Exception as e:
+        logger.error(f"❌ 추천 공고 생성 중 오류 발생")
+        logger.error(f"   🔍 오류 내용: {str(e)}")
+        logger.error(f"   📍 오류 타입: {type(e).__name__}")
         return {
             'success': False,
             'error': str(e),

@@ -1,7 +1,10 @@
 import os
+import logging
 from firebase_admin import firestore
 from sentence_transformers import SentenceTransformer
 from pinecone import Pinecone
+
+logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------
 # 0. Firestore에 단일 공고 추가 (데이터 세팅 및 관리자용)

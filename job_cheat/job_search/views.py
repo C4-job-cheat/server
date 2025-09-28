@@ -1,9 +1,12 @@
+import logging
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from .services.job_posting import add_job_to_firestore, get_all_jobs_from_firestore, vectorize_and_upsert_to_pinecone
 from .services.job_matching import save_persona_recommendations_score, calculate_persona_job_scores, calculate_persona_job_scores_from_data
 from .services.recommendation import get_user_recommendations, get_job_detail_with_recommendation
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(["GET"]) 
@@ -82,52 +85,6 @@ def vectorize_job_postings(request):
             "message": f"벡터화 과정에서 오류가 발생했습니다: {str(e)}"
         }, status=500)
 
-@api_view(["POST"])
-@authentication_classes([])
-@permission_classes([AllowAny])
-def save_persona_recommendations_view(request):
-    """
-    사용자 ID와 페르소나 ID로 페르소나를 가져와서 추천 공고 데이터를 저장합니다.
-    request body에서 user_id, persona_id만 받습니다.
-    최종 점수 기준은 함수 내에서 설정됩니다.
-    """
-    try:
-        user_id = request.data.get('user_id')
-        persona_id = request.data.get('persona_id')
-        
-        if not user_id:
-            return Response({
-                "success": False,
-                "message": "user_id가 필요합니다."
-            }, status=400)
-            
-        if not persona_id:
-            return Response({
-                "success": False,
-                "message": "persona_id가 필요합니다."
-            }, status=400)
-        
-        # 추천 공고 데이터 저장
-        result = save_persona_recommendations_score(user_id, persona_id)
-        
-        if result['success']:
-            return Response({
-                "success": True,
-                "message": result['message'],
-                "saved_count": result['saved_count'],
-                "min_final_score": result.get('min_final_score', 0.6)
-            })
-        else:
-            return Response({
-                "success": False,
-                "message": f"추천 저장 중 오류가 발생했습니다: {result['error']}"
-            }, status=500)
-            
-    except Exception as e:
-        return Response({
-            "success": False,
-            "message": f"요청 처리 중 오류가 발생했습니다: {str(e)}"
-        }, status=500)
 
 
 @api_view(["GET"])
