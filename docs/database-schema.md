@@ -34,14 +34,24 @@ users/{userId}/personas/{personaId}
 ├─ json_file_size: number             // JSON 파일 크기 (bytes)
 ├─ conversations_count: number        // 대화 기록 수
 ├─ html_file_deleted: boolean         // HTML 파일 삭제 여부
-├─ competency_evaluation: {           // 역량 평가 결과(중첩 객체)
-│    scores: object                   // 역량 ID별 점수 맵
-│    evaluated_at: timestamp          // 평가 완료 시각
-│    version: string                  // 평가 파이프라인 버전
-│    model: string | null             // (선택) 사용한 모델명
-│    system_prompt_version: string | null // (선택) 시스템 프롬프트 버전
-│    details: object[] | null         // (선택) 평가 근거 로그 목록
-│  }
+├─ embedding_status: string           // 임베딩 상태 (queued/running/completed/failed)
+├─ embedding_message: string          // 임베딩 상태 메시지
+├─ embedding_error: string | null     // 임베딩 오류 메시지
+├─ embedding_started_at: timestamp | null // 임베딩 시작 시각
+├─ embedding_completed_at: timestamp | null // 임베딩 완료 시각
+├─ embeddings_count: number           // 임베딩된 대화 수
+├─ embedding_model: string | null     // 사용된 임베딩 모델
+├─ has_embeddings: boolean            // 임베딩 존재 여부
+├─ vectorized_competency_tags: string[] // 벡터화된 역량 태그들
+├─ competencies: object               // 역량 평가 결과 (새로운 구조)
+│   ├─ {competency_name}: {          // 역량별 평가 결과
+│   │    score: number                // 역량 점수
+│   │    score_explanation: string    // 점수 설명
+│   │    key_insights: string[]       // 핵심 인사이트
+│   │    evaluated_at: timestamp      // 평가 시각
+│   │  }
+│   └─ ...                           // 다른 역량들
+├─ final_evaluation: string | null   // 최종 평가 결과
 ├─ created_at: timestamp              // 문서 생성 시각
 └─ updated_at: timestamp              // 최근 업데이트 시각
 ```
@@ -83,64 +93,95 @@ job_postings/{jobPostingId}
 
 ```
 users/{userId}/personas/{personaId}/cover_letters/{coverLetterId}
-├─ company_name: string
-├─ strength: string
-├─ experience: string
-├─ style: string
-├─ writing_rationale: string
-├─ final_draft: string
-├─ char_count: number
-└─ updated_at: string
+├─ user_id: string                    // 사용자 ID
+├─ persona_id: string                // 페르소나 ID
+├─ company_name: string               // 지원 회사 이름
+├─ cover_letter: object[]            // 자기소개서 문단들
+│   ├─ paragraph: string             // 문단 내용
+│   └─ reason: string                // 문단 작성 이유
+├─ style: string                     // 자기소개서 스타일 (experience/knowledge/creative)
+├─ character_count: number           // 글자 수
+├─ created_at: timestamp             // 생성 시각
+└─ updated_at: timestamp             // 수정 시각
 ```
 
 ### 5. users/{userId}/personas/{personaId}/interview_sessions (하위 컬렉션)
 
 ```
 users/{userId}/personas/{personaId}/interview_sessions/{sessionId}
-├─ user_id: string
-├─ cover_letter_id: string
-├─ overall_analysis: object
-├─ feedback: object
-└─ final_score: object
+├─ user_id: string                    // 사용자 ID
+├─ persona_id: string                 // 페르소나 ID
+├─ total_questions: number            // 총 질문 수
+├─ total_time: number                 // 총 소요 시간 (초)
+├─ average_answer_time: number        // 평균 답변 시간
+├─ total_answers: number              // 총 답변 수
+├─ average_answer_length: number      // 평균 답변 길이
+├─ score: number                      // 총점
+├─ grade: string                      // 등급 (A/B/C/D/E/F)
+├─ status: string                     // 상태 (in_progress/completed)
+├─ use_voice: boolean                 // 음성 면접 여부
+├─ final_good_points: string[]        // 최종 잘한 점 목록
+├─ final_improvement_points: string[] // 최종 개선할 점 목록
+├─ created_at: timestamp              // 생성 시각
+├─ updated_at: timestamp              // 수정 시각
+└─ completed_at: timestamp | null     // 완료 시각
 ```
 
 ### 6. users/{userId}/personas/{personaId}/interview_sessions/{sessionId}/questions (하위 컬렉션)
 
 ```
 users/{userId}/personas/{personaId}/interview_sessions/{sessionId}/questions/{questionId}
-├─ order: number
-├─ question_text: string
-├─ question_purpose: string
-├─ answer_tips: string
-├─ user_answer: object
-└─ analysis: object
+├─ question_id: string                // 질문 ID
+├─ question_number: number            // 질문 번호
+├─ question_type: string              // 질문 유형 (직무 지식/문제 해결 능력/프로젝트 경험/인성 및 가치관)
+├─ question_text: string              // 질문 내용
+├─ answer_text: string                // 답변 내용
+├─ answer_length: number              // 답변 길이
+├─ time_taken: number                 // 답변 소요 시간 (초)
+├─ is_answered: boolean               // 답변 여부
+├─ question_score: number             // 질문 점수
+├─ good_points: string[]              // 잘한 점 목록
+├─ improvement_points: string[]       // 개선할 점 목록
+├─ sample_answer: string              // 모범 답변 예시
+├─ question_intent: string[]          // 질문의 의도 목록
+├─ created_at: timestamp              // 생성 시각
+└─ updated_at: timestamp              // 수정 시각
 ```
 
-### 7. recommendations (컬렉션)
+### 7. users/{userId}/personas/{personaId}/recommendations (하위 컬렉션)
 
 ```
-recommendations/{recommendationId}
-├─ job_posting_id: string
-├─ recommendation_score: number
-└─ reason_summary: object
+users/{userId}/personas/{personaId}/recommendations/{recommendationId}
+├─ job_posting_id: string             // 공고 ID
+├─ recommendation_score: number       // 추천 점수
+├─ reason_summary: object             // 추천 이유 요약
+│   ├─ match_points: string[]         // 일치하는 요소들
+│   ├─ improvement_points: string[]   // 보완이 필요한 부분들
+│   └─ growth_suggestions: string[]  // 성장 방향 제안들
+└─ cover_letter: string               // 자기소개서 미리보기
 ```
 
 ### 8. scraps (컬렉션)
 
 ```
 scraps/{scrapId}
-├─ user_id: string
-├─ persona_id: string
-└─ job_posting_id: string
+├─ user_id: string                    // 사용자 ID
+├─ persona_id: string                 // 페르소나 ID
+└─ job_posting_id: string             // 공고 ID
 ```
 
 ## 🔄 주요 변경 사항
 
 - 기존 `personas/{user_id}/inputs/{document_id}` 구조에서 `users/{user_id}/personas/{persona_id}` 계층 구조로 개편했습니다.
-- 사용자 문서 아래에 페르소나·커버레터·인터뷰 데이터를 하위 컬렉션으로 정리해 관리 효율을 높였습니다.
+- 사용자 문서 아래에 페르소나·커버레터·인터뷰·추천 데이터를 하위 컬렉션으로 정리해 관리 효율을 높였습니다.
 - HTML 원본 업로드와 JSON 변환 파일 정보를 함께 저장하여 이력 추적을 강화했습니다.
 - `job_category` 기반으로 `core_competencies` 를 자동 생성하도록 구조를 확장했습니다.
 - JSON 변환 정보(`json_file_path`, `json_content_type`, `json_file_size`, `conversations_count`, `html_file_deleted`)를 추가하여 파이프라인 상태를 추적합니다.
+- **새로운 기능 추가**:
+  - 면접 시스템: 질문 생성, 답변 평가, 세션 관리
+  - 자기소개서 시스템: 문단별 구성, 스타일 지원
+  - 추천 시스템: 사용자별 맞춤 공고 추천, 추천 이유 분석
+  - 음성 면접 지원: Whisper를 통한 음성-텍스트 변환
 
 ## 💾 페르소나 문서 예시
 
@@ -189,38 +230,46 @@ scraps/{scrapId}
       "description": "리뷰·커밋·이슈 관리를 준수하는 태도"
     }
   ],
-  "html_file_path": "personas/user123/persona456/resume.html",
+  "html_file_path": "users/user123/html/persona456.html",
   "html_content_type": "text/html",
   "html_file_size": 2048576,
-  "json_file_path": "personas/user123/persona456/resume.json",
+  "json_file_path": "users/user123/json/persona456.json",
   "json_content_type": "application/json",
   "json_file_size": 1024000,
   "conversations_count": 15,
   "html_file_deleted": true,
-  "competency_evaluation": {
-    "scores": {
-      "문제 분해": 4,
-      "구현 정확성": 5,
-      "디버깅": 4,
-      "학습 민첩성": 3,
-      "업무 규범": 5
+  "embedding_status": "completed",
+  "embedding_message": "임베딩 작업이 성공적으로 완료되었습니다.",
+  "embedding_error": null,
+  "embedding_started_at": "2025-01-27T10:35:00.000000Z",
+  "embedding_completed_at": "2025-01-27T10:40:00.000000Z",
+  "embeddings_count": 128,
+  "embedding_model": "embed-multilingual-v3.0",
+  "has_embeddings": true,
+  "vectorized_competency_tags": ["JG_07_C01", "JG_07_C03"],
+  "competencies": {
+    "문제 분해": {
+      "score": 4,
+      "score_explanation": "요구사항을 단계적으로 분해한 사례가 다수 발견됨",
+      "key_insights": [
+        "복잡한 프로젝트를 모듈 단위로 나누어 처리",
+        "데이터 구조를 체계적으로 설계"
+      ],
+      "evaluated_at": "2025-01-27T11:00:00.000000Z"
     },
-    "evaluated_at": "2025-01-27T11:00:00.000000Z",
-    "version": "v1.0",
-    "model": "gemini-1.5-pro",
-    "system_prompt_version": "2025-01-15",
-    "details": [
-      {
-        "competency_id": "JG_07_C01",
-        "score": 4,
-        "reasoning": "요구사항을 단계적으로 분해한 사례 다수",
-        "confidence": 0.78
-      }
-      // ... 추가 역량 세부 설명 생략 ...
-    ]
+    "구현 정확성": {
+      "score": 5,
+      "score_explanation": "코드 품질이 높고 버그가 적음",
+      "key_insights": [
+        "깔끔한 코드 작성",
+        "효율적인 알고리즘 구현"
+      ],
+      "evaluated_at": "2025-01-27T11:00:00.000000Z"
+    }
   },
+  "final_evaluation": "전반적으로 우수한 개발 역량을 보이며, 특히 문제 해결 능력과 구현 정확성이 뛰어남",
   "created_at": "2025-01-27T10:30:45.123456Z",
-  "updated_at": "2025-01-27T10:30:45.123456Z"
+  "updated_at": "2025-01-27T10:40:00.000000Z"
 }
 ```
 
@@ -262,37 +311,98 @@ scraps/{scrapId}
       "description": "사용자 맥락을 반영해 새로운 해결책을 제안하는 능력"
     }
   ],
-  "html_file_path": "personas/user123/persona789/resume.html",
+  "html_file_path": "users/user123/html/persona789.html",
   "html_content_type": "text/html",
   "html_file_size": 1024000,
-  "json_file_path": "personas/user123/persona789/resume.json",
+  "json_file_path": "users/user123/json/persona789.json",
   "json_content_type": "application/json",
   "json_file_size": 512000,
   "conversations_count": 8,
   "html_file_deleted": true,
-  "competency_evaluation": null,
+  "embedding_status": "queued",
+  "embedding_message": "임베딩 작업이 대기열에 등록되었습니다.",
+  "embedding_error": null,
+  "embedding_started_at": null,
+  "embedding_completed_at": null,
+  "embeddings_count": 0,
+  "embedding_model": null,
+  "has_embeddings": false,
+  "vectorized_competency_tags": [],
+  "competencies": {},
+  "final_evaluation": null,
   "created_at": "2025-01-27T10:30:45.123456Z",
   "updated_at": "2025-01-27T10:30:45.123456Z"
 }
 ```
 
-## 🧠 Additional Fields: competency_scores
+## 🧠 Additional Fields: 임베딩 및 역량 평가
 
-- `competency_evaluation` (object): 역량 평가 결과를 담는 중첩 객체.
-- `competency_evaluation.scores` (object): 역량 이름(e.g. `문제 분해`)을 키로 하는 점수 맵.
-- `competency_evaluation.evaluated_at` (timestamp): 최신 RAG 평가 시각 (ISO 포맷).
-- `competency_evaluation.version` (string): 파이프라인 버전(e.g. `v1.0`).
-- `competency_evaluation.model` (string, optional): 점수 산출에 사용된 Gemini 모델명.
-- `competency_evaluation.system_prompt_version` (string, optional): 평가에 사용된 시스템 프롬프트 버전.
-- `competency_evaluation.details` (array, optional): 평가 근거·추론 스냅샷 목록.
+### 임베딩 관련 필드
+- `embedding_status` (string): 임베딩 처리 상태 (queued/running/completed/failed)
+- `embedding_message` (string): 임베딩 상태에 대한 설명 메시지
+- `embedding_error` (string, optional): 임베딩 실패 시 오류 메시지
+- `embedding_started_at` (timestamp, optional): 임베딩 작업 시작 시각
+- `embedding_completed_at` (timestamp, optional): 임베딩 작업 완료 시각
+- `embeddings_count` (number): 임베딩된 대화 청크 수
+- `embedding_model` (string, optional): 사용된 임베딩 모델명
+- `has_embeddings` (boolean): 임베딩 데이터 존재 여부
+- `vectorized_competency_tags` (string[]): 벡터화된 역량 태그 목록
+
+### 역량 평가 관련 필드 (새로운 구조)
+- `competencies` (object): 역량별 평가 결과를 담는 객체
+  - 각 역량명을 키로 하는 중첩 객체
+  - `score` (number): 역량 점수
+  - `score_explanation` (string): 점수에 대한 설명
+  - `key_insights` (string[]): 핵심 인사이트 목록
+  - `evaluated_at` (timestamp): 평가 완료 시각
+- `final_evaluation` (string, optional): 최종 종합 평가 결과
 
 ## 🧾 Collection: user_vector_embeddings
 
 ```
 user_vector_embeddings/{userId}
-├─ embeddings: [{ conversation_id, content, embedding[], competency_tags[], created_at }]
-├─ metadata: { total_conversations, last_updated, embedding_model }
-└─ created_at: timestamp
+├─ embeddings: object[]               // 임베딩 데이터 배열
+│   ├─ conversation_id: string        // 대화 ID
+│   ├─ content: string                // 임베딩된 텍스트 내용
+│   ├─ embedding: number[]             // 벡터 임베딩 값들
+│   ├─ competency_tags: string[]      // 역량 태그들
+│   └─ created_at: timestamp          // 생성 시각
+├─ metadata: object                   // 메타데이터
+│   ├─ total_conversations: number    // 총 대화 수
+│   ├─ last_updated: timestamp        // 마지막 업데이트 시각
+│   └─ embedding_model: string        // 사용된 임베딩 모델
+└─ created_at: timestamp              // 문서 생성 시각
+```
+
+## 🔧 추가 컬렉션: job_postings
+
+```
+job_postings/{jobPostingId}
+├─ company_name: string               // 회사명
+├─ company_logo: string                // 회사 로고 URL
+├─ title: string                      // 공고 제목
+├─ job_category: string               // 직무 분야
+├─ job_title: string                  // 직무명
+├─ hires_count: number                // 채용 인원
+├─ job_description: string            // 업무 설명
+├─ requirements: string[]               // 필수 요구사항
+├─ preferred: string[]                // 우대사항
+├─ required_qualifications: string[]  // 필수 자격요건
+├─ preferred_qualifications: string[] // 우대 자격요건
+├─ ideal_candidate: string[]          // 인재상 (7문항)
+├─ work_conditions: object            // 근무 조건
+│   ├─ employment_type: string        // 고용 형태
+│   ├─ location: string               // 근무지
+│   └─ position: string               // 직급
+├─ benefits: string[]                 // 복리후생
+├─ registration_date: string          // 등록일
+├─ application_deadline: string       // 지원 마감일
+└─ required_competencies: object      // 핵심 역량 5종 점수
+    ├─ expertise: number              // 전문성
+    ├─ potential: number              // 잠재력
+    ├─ problem_solving: number        // 문제해결능력
+    ├─ collaboration: number          // 협업능력
+    └─ adaptability: number           // 적응력
 ```
 
 > 😊 참고: 모든 문서는 UTF-8로 저장되며, 필드명은 Firestore 규약을 따릅니다.
