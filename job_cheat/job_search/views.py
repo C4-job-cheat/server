@@ -18,8 +18,6 @@ def health(request):
 
 
 @api_view(["POST"])
-@authentication_classes([])
-@permission_classes([AllowAny])
 def save_job_posting(request):
     """
     공고 데이터를 Firestore에 저장합니다.
@@ -53,8 +51,6 @@ def save_job_posting(request):
 
 
 @api_view(["POST"])
-@authentication_classes([])
-@permission_classes([AllowAny])
 def vectorize_job_postings(request):
     """
     Firestore에서 모든 공고를 불러와서 평문 변환, 벡터화하여 Pinecone에 저장합니다.
@@ -89,8 +85,6 @@ def vectorize_job_postings(request):
 
 
 @api_view(["GET"])
-@authentication_classes([])
-@permission_classes([AllowAny])
 def get_user_recommendations_view(request):
     """
     사용자의 페르소나에 저장된 추천 공고들을 상세 정보와 함께 반환합니다.
@@ -136,8 +130,6 @@ def get_user_recommendations_view(request):
 
 
 @api_view(["GET"])
-@authentication_classes([])
-@permission_classes([AllowAny])
 def get_job_detail_with_recommendation_view(request, job_posting_id):
     """
     특정 공고의 상세 정보와 추천 이유를 반환합니다.
