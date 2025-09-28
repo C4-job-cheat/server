@@ -8,10 +8,16 @@ def create_persona_card(persona_data: dict) -> dict:
     Returns:
         dict: persona_card 정보
     """
+    # skills와 certifications를 합쳐서 skills로 반환
+    skills = list(persona_data.get('skills', []))
+    certifications = persona_data.get('certifications', [])
+    if certifications:
+        skills.extend(certifications)
+    
     return {
         'school': persona_data.get('school_name', ''),
         'major': persona_data.get('major', ''),
         'job_category': persona_data.get('job_category', ''),
         'job_title': persona_data.get('job_role', ''),
-        'skills': persona_data.get('skills', [])
+        'skills': skills
     }
