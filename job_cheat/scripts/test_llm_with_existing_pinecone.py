@@ -39,8 +39,8 @@ async def test_llm_with_existing_pinecone():
     """기존 Pinecone 데이터를 활용한 LLM 테스트를 수행합니다."""
     
     # 기존에 저장된 사용자 ID (이전 테스트에서 사용한 것)
-    user_id = "test_user_structured_eval"  # 또는 "test_user_large_file"
-    document_id = "chat_converted_structured"
+    user_id = "my_test_user"  # 또는 "test_user_large_file"
+    document_id = "within_overall_evaluation"
     
     try:
         logger.info("=== 기존 Pinecone 데이터를 활용한 LLM 테스트 시작 ===")
@@ -170,24 +170,52 @@ async def test_llm_with_existing_pinecone():
             else:
                 logger.warning(f"⚠️ {competency['name']}에 대한 RAG 컨텍스트 없음")
         
-        # 5단계: 결과 요약
+        # 5단계: 최종 평가 수행
+        logger.info("\n5단계: 최종 평가 수행 중...")
+        
+        if evaluation_results:
+            # 모든 역량 평가 결과를 합쳐서 최종 평가 수행
+            final_evaluation = await perform_final_evaluation(
+                competency_results=evaluation_results,
+                gemini_service=gemini_service
+            )
+            
+            if final_evaluation:
+                logger.info("✅ 최종 평가 완료")
+                
+                # 최종 평가 결과를 Firestore에 저장
+                final_save_success = await save_final_evaluation_to_firestore(
+                    user_id=user_id,
+                    persona_id=document_id,
+                    final_evaluation_text=final_evaluation
+                )
+                
+                if final_save_success:
+                    logger.info("✅ 최종 평가 결과 Firestore 저장 완료")
+                else:
+                    logger.error("❌ 최종 평가 결과 Firestore 저장 실패")
+            else:
+                logger.warning("⚠️ 최종 평가 실패")
+        
+        # 6단계: 결과 요약
         logger.info("\n=== LLM 역량 평가 결과 요약 ===")
+        
+        # 개별 역량 평가 결과 요약
         for competency_name, result in evaluation_results.items():
             if result:
                 logger.info(f"\n📊 {competency_name}:")
-                logger.info(f"  점수: {result.get('score', 'N/A')}/10")
-                logger.info(f"  강점: {len(result.get('strengths', []))}개")
-                logger.info(f"  개선점: {len(result.get('improvements', []))}개")
+                logger.info(f"  점수: {result.get('score', 'N/A')}/100")
                 logger.info(f"  핵심 인사이트: {len(result.get('key_insights', []))}개")
                 
-                # 첫 번째 강점과 개선점 출력
-                strengths = result.get('strengths', [])
-                if strengths:
-                    logger.info(f"  주요 강점: {strengths[0].get('description', '')[:100]}...")
-                
-                improvements = result.get('improvements', [])
-                if improvements:
-                    logger.info(f"  주요 개선점: {improvements[0].get('description', '')[:100]}...")
+                # 첫 번째 핵심 인사이트 출력
+                insights = result.get('key_insights', [])
+                if insights:
+                    logger.info(f"  주요 인사이트: {insights[0][:100]}...")
+        
+        # 최종 평가 결과 요약
+        if evaluation_results:
+            logger.info(f"\n🎯 최종 평가:")
+            logger.info(f"  {final_evaluation}")
         
         logger.info(f"\n✅ 총 {len(evaluation_results)}개 역량 평가 완료")
         logger.info("=== 기존 Pinecone 데이터를 활용한 LLM 테스트 완료 ===")
@@ -217,34 +245,24 @@ async def evaluate_competency_with_citations(
 === 평가 지침 ===
 1. 위 대화 컨텍스트를 바탕으로 사용자의 {competency_name} 역량을 구체적으로 평가해주세요.
 2. **반드시 대화 내용에서 실제 인용문을 포함하여 근거를 제시해주세요.**
-3. 인용할 때는 "사용자: [인용문]" 또는 "어시스턴트: [인용문]" 형식으로 명확히 표시해주세요.
-4. 강점과 개선점을 균형있게 분석해주세요.
-5. 평가 점수(1-10점)와 함께 구체적인 이유를 설명해주세요.
+3. 평가 점수(1-100점)와 함께 구체적인 이유를 설명해주세요.
+4. "key_insights" 배열에 핵심 인사이트를 3개를 포함해주세요.
+
+중요: 위 요청에 대해 반드시 유효한 JSON 형식으로만 응답해주세요.
+- 다른 설명이나 마크다운 코드 블록(```json)은 절대 포함하지 마세요.
+- JSON 객체만 반환해주세요.
+- 응답은 반드시 {{로 시작하고 }}로 끝나야 합니다.
+- 모든 문자열 값은 반드시 따옴표로 감싸주세요.
 
 === 응답 형식 (JSON) ===
 {{
     "competency_name": "{competency_name}",
-    "score": 8,
+    "score": 1~100,
     "score_explanation": "점수에 대한 구체적인 설명",
-    "strengths": [
-        {{
-            "description": "강점 설명",
-            "evidence": "대화에서 인용한 구체적 근거",
-            "citation": "사용자: [실제 인용문]"
-        }}
-    ],
-    "improvements": [
-        {{
-            "description": "개선점 설명",
-            "suggestion": "구체적인 개선 방안",
-            "evidence": "대화에서 인용한 구체적 근거",
-            "citation": "사용자: [실제 인용문]"
-        }}
-    ],
-    "overall_assessment": "전체적인 평가 및 종합 의견",
     "key_insights": [
         "핵심 인사이트 1",
-        "핵심 인사이트 2"
+        "핵심 인사이트 2",
+        "핵심 인사이드 3"
     ]
 }}
 """
@@ -274,6 +292,96 @@ async def evaluate_competency_with_citations(
         return None
 
 
+async def perform_final_evaluation(
+    competency_results: Dict[str, Any],
+    gemini_service: GeminiService
+) -> Dict[str, Any]:
+    """모든 역량 평가 결과를 종합하여 최종 평가를 수행합니다."""
+    
+    # 모든 역량 평가 결과를 컨텍스트로 구성
+    context_parts = []
+    for competency_name, result in competency_results.items():
+        if result:
+            context_parts.append(f"""
+=== {competency_name} 역량 평가 결과 ===
+점수: {result.get('score', 'N/A')}/100
+점수 설명: {result.get('score_explanation', '')}
+핵심 인사이트:
+{chr(10).join(f"- {insight}" for insight in result.get('key_insights', []))}
+""")
+    
+    context = "\n".join(context_parts)
+    
+    final_evaluation_prompt = f"""
+다음은 한 사용자의 역량 평가 결과입니다.
+
+=== 개별 역량 평가 결과 ===
+{context}
+
+=== 최종 평가 요청 ===
+위의 모든 역량 평가 결과를 종합하여 사용자의 전체적인 역량 수준을 평가해주세요. 
+
+**별도의 소제목이나 구분 기호를 사용하지 말고**, 아래 내용을 모두 자연스럽게 하나의 완성된 글로 엮어서 800자 이내로 서술해주세요.
+1. 전체적인 역량 수준에 대한 종합적인 평가
+2. 주요 강점과 우수한 영역
+3. 개선이 필요한 부분과 구체적인 개선 방안
+4. 커리어 관점에서의 인사이트와 조언
+
+평가는 자연스러운 문장으로 작성해주세요. JSON 형식이 아닌 일반 텍스트로 응답해주세요.
+"""
+    
+    try:
+        logger.info(f"최종 평가 수행 중: {final_evaluation_prompt}")
+        # Gemini를 사용한 최종 평가 수행 (일반 텍스트)
+        evaluation_result = await gemini_service.generate_structured_response(
+            prompt=final_evaluation_prompt,
+            response_format="text"
+        )
+        
+        if evaluation_result:
+            # 단순 문자열로 반환
+            return evaluation_result.strip()
+        else:
+            logger.warning("최종 평가 결과가 비어있음")
+            return None
+            
+    except Exception as exc:
+        logger.error(f"최종 평가 실패: {exc}")
+        return None
+
+
+async def save_final_evaluation_to_firestore(
+    user_id: str,
+    persona_id: str,
+    final_evaluation_text: str
+) -> bool:
+    """최종 평가 결과를 Firestore에 저장합니다."""
+    
+    try:
+        # Firestore 문서 업데이트 데이터 구성 (단순 문자열)
+        update_payload = {
+            "final_evaluation": final_evaluation_text
+        }
+        
+        # Firestore 문서 업데이트
+        result = update_persona_document(
+            user_id=user_id,
+            persona_id=persona_id,
+            payload=update_payload
+        )
+        
+        if result:
+            logger.info("✅ 최종 평가 결과 Firestore 저장 완료")
+            return True
+        else:
+            logger.error("❌ 최종 평가 결과 Firestore 저장 실패")
+            return False
+            
+    except Exception as exc:
+        logger.error(f"최종 평가 Firestore 저장 실패: {exc}")
+        return False
+
+
 async def save_competency_to_firestore(
     user_id: str,
     persona_id: str,
@@ -282,16 +390,15 @@ async def save_competency_to_firestore(
     """역량 평가 결과를 Firestore에 저장합니다."""
     
     try:
-        # Firestore 문서 업데이트 데이터 구성
+        # Firestore 문서 업데이트 데이터 구성 (중첩 구조)
         update_payload = {
-            f"competencies.{competency_data['competency_name']}": {
-                "score": competency_data.get("score", 0),
-                "score_explanation": competency_data.get("score_explanation", ""),
-                "strengths": competency_data.get("strengths", []),
-                "improvements": competency_data.get("improvements", []),
-                "overall_assessment": competency_data.get("overall_assessment", ""),
-                "key_insights": competency_data.get("key_insights", []),
-                "evaluated_at": "2025-01-27T16:00:00.000Z"  # 실제로는 현재 시간
+            "competencies": {
+                competency_data['competency_name']: {
+                    "score": competency_data.get("score", 0),
+                    "score_explanation": competency_data.get("score_explanation", ""),
+                    "key_insights": competency_data.get("key_insights", []),
+                    "evaluated_at": "2025-01-27T16:00:00.000Z"  # 실제로는 현재 시간
+                }
             }
         }
         
