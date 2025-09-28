@@ -15,20 +15,38 @@ def preprocess_persona_to_text(persona_data: dict) -> str:
     Returns:
         str: 전처리된 평문 텍스트.
     """
-    # education 맵에서 안전하게 데이터 추출
-    education_info = persona_data.get('education', {})
-    education_text = f"{education_info.get('school', '')} {education_info.get('major', '')} {education_info.get('degree', '')}"
-
-    # competency_reasons 맵에서 value(설명)만 추출하여 하나의 문자열로 합침
-    competency_reasons_map = persona_data.get('competency_reasons', {})
-    reasons_text = ' '.join(competency_reasons_map.values())
+    # 새로운 데이터 구조에 맞게 수정
+    education_text = f"{persona_data.get('school_name', '')} {persona_data.get('major', '')}"
+    
+    # competencies 맵에서 score_explanation과 key_insights 추출
+    competencies = persona_data.get('competencies', {})
+    competency_texts = []
+    
+    for competency_name, competency_data in competencies.items():
+        score = competency_data.get('score', 0)
+        explanation = competency_data.get('score_explanation', '')
+        insights = competency_data.get('key_insights', [])
+        
+        competency_text = f"{competency_name} (점수: {score}): {explanation}"
+        if insights:
+            insights_text = ' '.join(insights)
+            competency_text += f" 핵심 인사이트: {insights_text}"
+        
+        competency_texts.append(competency_text)
+    
+    competencies_text = ' '.join(competency_texts)
+    
+    # final_evaluation 추가
+    final_evaluation = persona_data.get('final_evaluation', '')
 
     # f-string을 사용하여 전체 텍스트를 최종적으로 조합
     plain_text = f"""
-직군 및 직무: {persona_data.get('job_category', '')}, {persona_data.get('job_title', '')}
+직군 및 직무: {persona_data.get('job_category', '')}, {persona_data.get('job_role', '')}
 학력: {education_text}
-역량 분석 상세: {reasons_text}
-AI 종합 분석: {persona_data.get('ai_analysis_summary', '')}
+기술: {', '.join(persona_data.get('skills', []))}
+자격증: {', '.join(persona_data.get('certifications', []))}
+역량 분석 상세: {competencies_text}
+최종 평가: {final_evaluation}
 """
     return plain_text.strip()
 
@@ -82,9 +100,9 @@ def find_matching_jobs(persona_data: dict) -> list:
         "category": {"$eq": persona_data.get('job_category', '')}
     }
     
-    # job_title이 있으면 추가 필터링
-    if persona_data.get('job_title'):
-        filter_conditions["title"] = {"$eq": persona_data.get('job_title')}
+    # job_role이 있으면 추가 필터링
+    if persona_data.get('job_role'):
+        filter_conditions["title"] = {"$eq": persona_data.get('job_role')}
     
     # 5. Pinecone에서 유사도 검색
     search_results = index.query(
@@ -394,7 +412,7 @@ def calculate_persona_job_scores(user_id: str, persona_id: str) -> dict:
             'total_jobs': len(job_scores),
             'persona_data': {
                 'job_category': persona_data.get('job_category'),
-                'job_title': persona_data.get('job_title'),
+                'job_title': persona_data.get('job_role'),
                 'skills': persona_skills
             }
         }
@@ -486,7 +504,7 @@ def calculate_persona_job_scores_from_data(persona_data: dict) -> dict:
             'total_jobs': len(job_scores),
             'persona_data': {
                 'job_category': persona_data.get('job_category'),
-                'job_title': persona_data.get('job_title'),
+                'job_title': persona_data.get('job_role'),
                 'skills': persona_skills
             }
         }

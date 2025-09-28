@@ -7,7 +7,7 @@ from core.utils import create_persona_card
 def create_competency_info(persona_data: dict) -> dict:
     """
     페르소나 데이터에서 competency 정보를 추출합니다.
-    scores와 reasons를 하나로 합쳐서 반환합니다.
+    새로운 competencies 구조에 맞게 수정되었습니다.
     
     Args:
         persona_data (dict): 페르소나 데이터
@@ -15,21 +15,21 @@ def create_competency_info(persona_data: dict) -> dict:
     Returns:
         dict: competency 정보
     """
-    competency_scores = persona_data.get('competency_scores', {})
-    competency_reasons = persona_data.get('competency_reasons', {})
+    competencies = persona_data.get('competencies', {})
     
-    # scores와 reasons를 하나로 합치기
+    # 새로운 competencies 구조에서 정보 추출
     competency_details = {}
-    for key, score in competency_scores.items():
-        reason = competency_reasons.get(key, '')
-        competency_details[key] = {
-            'score': score,
-            'reason': reason
+    for competency_name, competency_data in competencies.items():
+        competency_details[competency_name] = {
+            'score': competency_data.get('score', 0),
+            'score_explanation': competency_data.get('score_explanation', ''),
+            'key_insights': competency_data.get('key_insights', []),
+            'evaluated_at': competency_data.get('evaluated_at', '')
         }
     
     return {
         'details': competency_details,
-        'ai_analysis_summary': persona_data.get('ai_analysis_summary', '')
+        'final_evaluation': persona_data.get('final_evaluation', '')
     }
 
 
@@ -65,10 +65,22 @@ def get_user_recommendations(user_id: str, persona_id: str) -> dict:
         persona_card = create_persona_card(persona_data)
         competency = create_competency_info(persona_data)
         
-        # 3. recommendations 컬렉션에서 추천 데이터 가져오기
+        # 3. recommendations 컬렉션 존재 여부 확인
         recommendations_ref = db.collection('users').document(user_id).collection('personas').document(persona_id).collection('recommendations')
-        recommendations_docs = recommendations_ref.stream()
         
+        # 먼저 존재 여부만 확인 (첫 번째 문서만 체크)
+        recommendations_exists = False
+        for doc in recommendations_ref.limit(1).stream():
+            recommendations_exists = True
+            break
+        
+        # recommendations가 없으면 새로 생성
+        if not recommendations_exists:
+            from .job_matching import save_persona_recommendations_score
+            save_result = save_persona_recommendations_score(user_id, persona_id)
+        
+        # recommendations 데이터 가져오기
+        recommendations_docs = recommendations_ref.stream()
         recommendations = []
         for doc in recommendations_docs:
             recommendation_data = doc.to_dict()
@@ -77,14 +89,6 @@ def get_user_recommendations(user_id: str, persona_id: str) -> dict:
                 'job_posting_id': recommendation_data.get('job_posting_id'),
                 'recommendation_score': recommendation_data.get('recommendation_score')
             })
-        
-        if not recommendations:
-            return {
-                'persona_card': persona_card,
-                'competency': competency,
-                'recommendations': [],
-                'total_count': 0
-            }
         
         # 4. 각 추천 공고의 상세 정보를 job_postings에서 가져오기
         detailed_recommendations = []
@@ -272,10 +276,12 @@ def generate_reason_summary_with_llm(persona_data: dict, job_data: dict) -> dict
 이 사용자가 이 공고에 적합한 이유를 분석하여 다음 3가지 관점에서 각각 3개의 항목으로 정리해주세요:
 
 **사용자 페르소나 정보:**
-- 직무: {persona_data.get('job_category', '')} / {persona_data.get('job_title', '')}
-- 학력: {persona_data.get('education', {}).get('school', '')} {persona_data.get('education', {}).get('major', '')}
+- 직무: {persona_data.get('job_category', '')} / {persona_data.get('job_role', '')}
+- 학력: {persona_data.get('school_name', '')} {persona_data.get('major', '')}
 - 보유 기술: {', '.join(persona_data.get('skills', []))}
-- 역량 점수: {persona_data.get('competency_scores', {})}
+- 자격증: {', '.join(persona_data.get('certifications', []))}
+- 역량 평가: {persona_data.get('competencies', {})}
+- 최종 평가: {persona_data.get('final_evaluation', '')}
 
 **채용 공고 정보:**
 - 회사: {job_data.get('company_name', '')}

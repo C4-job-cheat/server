@@ -8,12 +8,10 @@ def create_persona_card(persona_data: dict) -> dict:
     Returns:
         dict: persona_card 정보
     """
-    education_info = persona_data.get('education', {})
-    
     return {
-        'school': education_info.get('school', ''),
-        'major': education_info.get('major', ''),
+        'school': persona_data.get('school_name', ''),
+        'major': persona_data.get('major', ''),
         'job_category': persona_data.get('job_category', ''),
-        'job_title': persona_data.get('job_title', ''),
+        'job_title': persona_data.get('job_role', ''),
         'skills': persona_data.get('skills', [])
     }
