@@ -191,35 +191,41 @@ def get_job_requirements_and_preferred(firestore_id: str) -> dict:
         }
 
 
-def calculate_skill_score(persona_skills: list, job_requirements: list, job_preferred: list) -> float:
+def calculate_skill_score(persona_skills: list, job_requirements: list, job_preferred: list, persona_certifications: list = None) -> float:
     """
-    페르소나의 skills와 공고의 requirements, preferred를 비교하여 skill 점수를 계산합니다.
+    페르소나의 skills, certifications와 공고의 requirements, preferred를 비교하여 skill 점수를 계산합니다.
     
     Args:
         persona_skills (list): 페르소나의 skills 리스트
         job_requirements (list): 공고의 requirements 리스트
         job_preferred (list): 공고의 preferred 리스트
+        persona_certifications (list): 페르소나의 certifications 리스트 (선택사항)
         
     Returns:
         float: skill 점수 (0.0 ~ 1.0)
     """
-    if not persona_skills:
+    # skills와 certifications를 합쳐서 전체 기술/자격 목록 생성
+    all_persona_qualifications = list(persona_skills) if persona_skills else []
+    if persona_certifications:
+        all_persona_qualifications.extend(persona_certifications)
+    
+    if not all_persona_qualifications:
         return 0.0
     
     # Requirements 점수 계산 (0.0 ~ 1.0 사이의 기본 점수)
     requirements_matches = 0
-    for skill in persona_skills:
+    for qualification in all_persona_qualifications:
         for req in job_requirements:
-            if skill.lower() in req.lower() or req.lower() in skill.lower():
+            if qualification.lower() in req.lower() or req.lower() in qualification.lower():
                 requirements_matches += 1
                 break
     requirements_score = requirements_matches / len(job_requirements) if job_requirements else 0.0
 
     # Preferred 점수 계산 (가산점 계산용)
     preferred_matches = 0
-    for skill in persona_skills:
+    for qualification in all_persona_qualifications:
         for pref in job_preferred:
-            if skill.lower() in pref.lower() or pref.lower() in skill.lower():
+            if qualification.lower() in pref.lower() or pref.lower() in qualification.lower():
                 preferred_matches += 1
                 break
     preferred_score = preferred_matches / len(job_preferred) if job_preferred else 0.0
@@ -286,8 +292,10 @@ def save_persona_recommendations_score(user_id: str, persona_id: str) -> dict:
         logger.info(f"👤 페르소나 데이터 조회 중...")
         persona_data = get_persona_from_firestore(user_id, persona_id)
         persona_skills = persona_data.get('skills', [])
+        persona_certifications = persona_data.get('certifications', [])
         logger.info(f"✅ 페르소나 데이터 조회 완료")
         logger.info(f"   🛠️  보유 스킬: {persona_skills}")
+        logger.info(f"   📜 보유 자격증: {persona_certifications}")
         
         # 2. 매칭된 공고 찾기
         logger.info(f"🔍 매칭된 공고 검색 중...")
@@ -324,11 +332,12 @@ def save_persona_recommendations_score(user_id: str, persona_id: str) -> dict:
             # 공고의 requirements와 preferred 가져오기
             job_details = get_job_requirements_and_preferred(job['firestore_id'])
             
-            # skill 점수 계산
+            # skill 점수 계산 (skills와 certifications 모두 포함)
             skill_score = calculate_skill_score(
                 persona_skills,
                 job_details['requirements'],
-                job_details['preferred']
+                job_details['preferred'],
+                persona_certifications
             )
             
             # 최종 점수 계산
@@ -423,6 +432,7 @@ def calculate_persona_job_scores(user_id: str, persona_id: str) -> dict:
         # 1. Firestore에서 페르소나 데이터 가져오기
         persona_data = get_persona_from_firestore(user_id, persona_id)
         persona_skills = persona_data.get('skills', [])
+        persona_certifications = persona_data.get('certifications', [])
         
         # 2. 매칭된 공고 찾기
         matching_jobs = find_matching_jobs(persona_data)
@@ -452,11 +462,12 @@ def calculate_persona_job_scores(user_id: str, persona_id: str) -> dict:
             # 공고의 requirements와 preferred 가져오기
             job_details = get_job_requirements_and_preferred(job['firestore_id'])
             
-            # skill 점수 계산
+            # skill 점수 계산 (skills와 certifications 모두 포함)
             skill_score = calculate_skill_score(
                 persona_skills,
                 job_details['requirements'],
-                job_details['preferred']
+                job_details['preferred'],
+                persona_certifications
             )
             
             # 최종 점수 계산
@@ -515,6 +526,7 @@ def calculate_persona_job_scores_from_data(persona_data: dict) -> dict:
         min_similarity_score = 0.5
         
         persona_skills = persona_data.get('skills', [])
+        persona_certifications = persona_data.get('certifications', [])
         
         # 1. 매칭된 공고 찾기
         matching_jobs = find_matching_jobs(persona_data)
@@ -544,11 +556,12 @@ def calculate_persona_job_scores_from_data(persona_data: dict) -> dict:
             # 공고의 requirements와 preferred 가져오기
             job_details = get_job_requirements_and_preferred(job['firestore_id'])
             
-            # skill 점수 계산
+            # skill 점수 계산 (skills와 certifications 모두 포함)
             skill_score = calculate_skill_score(
                 persona_skills,
                 job_details['requirements'],
-                job_details['preferred']
+                job_details['preferred'],
+                persona_certifications
             )
             
             # 최종 점수 계산
