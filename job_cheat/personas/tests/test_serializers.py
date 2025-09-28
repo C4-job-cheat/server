@@ -56,10 +56,11 @@ class PersonaInputSerializerTests(SimpleTestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn("html_file", serializer.errors)
 
-    def test_rejects_empty_skills(self):
+    def test_accepts_empty_skills(self):
+        """빈 skills 배열은 허용되어야 한다 (선택사항 필드)."""
         data = self._base_payload()
-        data["skills"] = ["   "]
+        data["skills"] = ["   "]  # 공백만 있는 배열
 
         serializer = PersonaInputSerializer(data=data)
-        self.assertFalse(serializer.is_valid())
-        self.assertIn("skills", serializer.errors)
+        self.assertTrue(serializer.is_valid())
+        self.assertEqual(serializer.validated_data["skills"], [])  # 빈 배열로 정규화됨

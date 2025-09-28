@@ -18,6 +18,48 @@ SECRET_KEY = 'django-insecure-1j-@1=0)%671b9b-r6^r7!notaw=zm5pw9!)wa)(92py51gta(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True if os.getenv('DEBUG', 'true').lower() == 'true' else False
 
+# Django 개발 서버 경고 메시지 숨기기
+def hide_django_warnings(hide_warnings=True):
+    """
+    Django 개발 서버 경고 메시지를 숨기는 함수
+    
+    Args:
+        hide_warnings (bool): True면 경고 메시지를 숨김, False면 경고 메시지를 표시
+    """
+    if not hide_warnings:
+        return
+        
+    import warnings
+    import os
+    import sys
+    
+    # 환경 변수로 모든 경고 비활성화
+    os.environ['PYTHONWARNINGS'] = 'ignore'
+    warnings.filterwarnings('ignore')
+    
+    # 표준 출력을 필터링하여 경고 메시지 제거
+    class NoWarningOutput:
+        def __init__(self, original_stream):
+            self.original_stream = original_stream
+            
+        def write(self, message):
+            if 'WARNING: This is a development server' not in message and 'Do not use it in a production setting' not in message:
+                self.original_stream.write(message)
+                
+        def flush(self):
+            self.original_stream.flush()
+            
+        def __getattr__(self, name):
+            return getattr(self.original_stream, name)
+    
+    # 표준 출력과 표준 에러를 필터링
+    sys.stdout = NoWarningOutput(sys.stdout)
+    sys.stderr = NoWarningOutput(sys.stderr)
+
+# 함수 실행 (환경 변수로 제어 가능)
+HIDE_DJANGO_WARNINGS = os.getenv('HIDE_DJANGO_WARNINGS', 'true').lower() == 'true'
+hide_django_warnings(HIDE_DJANGO_WARNINGS)
+
 # 백엔드가 수신할 호스트(ngrok 서브도메인 전체 허용)
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.ngrok-free.app', '.ngrok.io']
 
@@ -40,6 +82,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 # 프론트가 로컬이면 그대로 허용
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
+    'http://localhost:5173',
 ]
 
 # Application definition
@@ -240,6 +283,98 @@ from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'ngrok-skip-browser-warning',
 ]
+
+# CORS 추가 설정 (파일 업로드를 위한)
+CORS_ALLOW_CREDENTIALS = True  # 쿠키 및 인증 헤더 허용
+CORS_PREFLIGHT_MAX_AGE = 86400  # 24시간 (preflight 캐시 시간)
+
+# 허용할 HTTP 메서드
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+# 파일 업로드 관련 설정 (200MB 대용량 파일 streaming 처리)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024  # 200MB (메모리에 올리지 않고 임시 파일로 저장)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024  # 200MB (메모리에 올리지 않고 임시 파일로 저장)
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000  # 폼 필드 수 제한
+
+# 대용량 파일 처리를 위한 임시 파일 설정
+FILE_UPLOAD_TEMP_DIR = None  # 시스템 기본 임시 디렉토리 사용
+FILE_UPLOAD_PERMISSIONS = 0o644  # 임시 파일 권한
+
+# 요청 타임아웃 설정 (200MB 파일 처리용)
+REQUEST_TIMEOUT = 1800  # 30분 (200MB 파일 처리 시간 확보)
+
+# 대용량 파일 업로드를 위한 추가 설정 (임시 파일 우선 사용)
+FILE_UPLOAD_HANDLERS = [
+    'django.core.files.uploadhandler.TemporaryFileUploadHandler',
+    'django.core.files.uploadhandler.MemoryFileUploadHandler',
+]
+
+# 세션 타임아웃 설정 (대용량 파일 업로드 중 세션 만료 방지)
+SESSION_COOKIE_AGE = 7200  # 2시간 (200MB 파일 업로드 시간 고려)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# ASGI 관련 설정 (대용량 파일 처리용)
+ASGI_APPLICATION = 'job_cheat.asgi.application'
+
+# RAG 시스템 설정
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_EMBEDDING_MODEL = os.getenv('GEMINI_EMBEDDING_MODEL', 'text-embedding-004')
+GEMINI_TEXT_MODEL = os.getenv('GEMINI_TEXT_MODEL', 'gemini-1.5-pro')
+
+# 임베딩 설정
+EMBEDDING_DIMENSION = 768
+EMBEDDING_TASK_TYPE = 'RETRIEVAL_DOCUMENT'  # 문서 검색용
+
+# 벡터 DB 설정
+RAG_VECTOR_COLLECTION = 'user_vector_embeddings'
+
+# 로깅 설정 (Broken pipe 오류 처리)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'django.log',
+            'formatter': 'verbose',
+        },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',  # Broken pipe 오류를 WARNING으로 처리
+            'propagate': False,
+        },
+    },
+}
 
 
 # 로깅 설정 (Broken pipe 오류 처리)
