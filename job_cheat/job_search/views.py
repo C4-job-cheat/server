@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny
 from .services.job_posting import add_job_to_firestore, get_all_jobs_from_firestore, vectorize_and_upsert_to_pinecone
 from .services.job_matching import save_persona_recommendations_score, calculate_persona_job_scores, calculate_persona_job_scores_from_data
 from .services.recommendation import get_user_recommendations, get_job_detail_with_recommendation
+from .services.scrap_service import add_job_to_scrap, remove_job_from_scrap, get_scraped_jobs, ScrapServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -268,6 +269,158 @@ def calculate_persona_job_scores_from_data_view(request):
                 "success": False,
                 "message": f"점수 계산 중 오류가 발생했습니다: {result['error']}"
             }, status=500)
+            
+    except Exception as e:
+        return Response({
+            "success": False,
+            "message": f"요청 처리 중 오류가 발생했습니다: {str(e)}"
+        }, status=500)
+
+
+@api_view(["POST"])
+def add_scrap_view(request):
+    """
+    공고를 스크랩에 추가합니다.
+    request body에서 user_id, persona_id, job_posting_id를 받습니다.
+    """
+    try:
+        user_id = request.data.get('user_id')
+        persona_id = request.data.get('persona_id')
+        job_posting_id = request.data.get('job_posting_id')
+        
+        if not user_id:
+            return Response({
+                "success": False,
+                "message": "user_id가 필요합니다."
+            }, status=400)
+            
+        if not persona_id:
+            return Response({
+                "success": False,
+                "message": "persona_id가 필요합니다."
+            }, status=400)
+            
+        if not job_posting_id:
+            return Response({
+                "success": False,
+                "message": "job_posting_id가 필요합니다."
+            }, status=400)
+        
+        # 공고 스크랩 추가
+        result = add_job_to_scrap(user_id, persona_id, job_posting_id)
+        
+        if result['success']:
+            return Response(result, status=201)
+        else:
+            return Response(result, status=400)
+            
+    except ScrapServiceError as e:
+        return Response({
+            "success": False,
+            "message": str(e)
+        }, status=400)
+    except Exception as e:
+        return Response({
+            "success": False,
+            "message": f"요청 처리 중 오류가 발생했습니다: {str(e)}"
+        }, status=500)
+
+
+@api_view(["DELETE"])
+def remove_scrap_view(request):
+    """
+    공고를 스크랩에서 제거합니다.
+    request body에서 user_id, persona_id, job_posting_id를 받습니다.
+    """
+    try:
+        user_id = request.data.get('user_id')
+        persona_id = request.data.get('persona_id')
+        job_posting_id = request.data.get('job_posting_id')
+        
+        if not user_id:
+            return Response({
+                "success": False,
+                "message": "user_id가 필요합니다."
+            }, status=400)
+            
+        if not persona_id:
+            return Response({
+                "success": False,
+                "message": "persona_id가 필요합니다."
+            }, status=400)
+            
+        if not job_posting_id:
+            return Response({
+                "success": False,
+                "message": "job_posting_id가 필요합니다."
+            }, status=400)
+        
+        # 공고 스크랩 제거
+        result = remove_job_from_scrap(user_id, persona_id, job_posting_id)
+        
+        if result['success']:
+            return Response(result)
+        else:
+            return Response(result, status=400)
+            
+    except ScrapServiceError as e:
+        return Response({
+            "success": False,
+            "message": str(e)
+        }, status=400)
+    except Exception as e:
+        return Response({
+            "success": False,
+            "message": f"요청 처리 중 오류가 발생했습니다: {str(e)}"
+        }, status=500)
+
+
+@api_view(["GET"])
+def get_scraped_jobs_view(request):
+    """
+    스크랩된 공고 목록을 조회합니다.
+    query parameter에서 user_id, persona_id를 받습니다.
+    """
+    try:
+        user_id = request.GET.get('user_id')
+        persona_id = request.GET.get('persona_id')
+        
+        if not user_id:
+            return Response({
+                "success": False,
+                "message": "user_id가 필요합니다."
+            }, status=400)
+            
+        if not persona_id:
+            return Response({
+                "success": False,
+                "message": "persona_id가 필요합니다."
+            }, status=400)
+        
+        # 스크랩된 공고 목록 조회
+        scraped_jobs = get_scraped_jobs(user_id, persona_id)
+        
+        # 페르소나 카드 데이터 조회
+        from core.services.firebase_personas import get_persona_document
+        from core.utils import create_persona_card
+        from django.conf import settings
+        
+        db = getattr(settings, "FIREBASE_DB", None)
+        if not db:
+            return Response({
+                "success": False,
+                "message": "Firestore 클라이언트를 찾을 수 없습니다."
+            }, status=500)
+        
+        persona_data = get_persona_document(user_id=user_id, persona_id=persona_id, db=db)
+        persona_card = create_persona_card(persona_data)
+        
+        return Response({
+            "success": True,
+            "scraped_jobs": scraped_jobs,
+            "total_count": len(scraped_jobs),
+            "persona_card": persona_card
+        })
             
     except Exception as e:
         return Response({
