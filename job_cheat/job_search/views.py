@@ -165,7 +165,8 @@ def get_job_detail_with_recommendation_view(request, job_posting_id):
         if result['success']:
             return Response({
                 "job_posting": result['job_posting'],
-                "recommendation": result['recommendation']
+                "recommendation": result['recommendation'],
+                "cover_letter_preview": result['cover_letter_preview']
             })
         else:
             return Response({

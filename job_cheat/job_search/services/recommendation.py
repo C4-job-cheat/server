@@ -304,7 +304,31 @@ def get_job_detail_with_recommendation(user_id: str, persona_id: str, job_postin
         else:
             logger.info(f"✅ 기존 추천 이유 요약 사용")
         
-        # 5. 결과 반환
+        # 5. 자기소개서 미리보기 생성 또는 조회
+        logger.info(f"📝 자기소개서 미리보기 처리 중...")
+        cover_letter_preview = recommendation_data.get('cover_letter', '')
+        
+        if not cover_letter_preview:
+            logger.info(f"⚠️  자기소개서 미리보기가 없음. LLM으로 생성 중...")
+            cover_letter_result = generate_cover_letter_preview_with_llm(persona_data, job_data)
+            
+            if cover_letter_result['success']:
+                logger.info(f"✅ 자기소개서 미리보기 생성 완료")
+                cover_letter_preview = cover_letter_result['cover_letter']
+                
+                # Firestore에 저장
+                logger.info(f"💾 Firestore에 자기소개서 미리보기 저장 중...")
+                recommendations_ref.document(recommendation_id).update({
+                    'cover_letter': cover_letter_preview
+                })
+                logger.info(f"✅ Firestore 저장 완료")
+            else:
+                logger.error(f"❌ 자기소개서 미리보기 생성 실패: {cover_letter_result['error']}")
+                cover_letter_preview = "자기소개서 미리보기 생성에 실패했습니다."
+        else:
+            logger.info(f"✅ 기존 자기소개서 미리보기 사용")
+
+        # 6. 결과 반환
         logger.info(f"🎉 공고 상세 정보 및 추천 이유 조회 완료!")
         logger.info(f"   📊 최종 추천 점수: {recommendation_data.get('recommendation_score', 'N/A')}")
         
@@ -318,11 +342,111 @@ def get_job_detail_with_recommendation(user_id: str, persona_id: str, job_postin
                     'improvement_points': improvement_points,
                     'growth_suggestions': growth_suggestions
                 }
-            }
+            },
+            'cover_letter_preview': cover_letter_preview
         }
         
     except Exception as e:
         logger.error(f"❌ 공고 상세 정보 및 추천 이유 조회 중 오류 발생")
+        logger.error(f"   🔍 오류 내용: {str(e)}")
+        logger.error(f"   📍 오류 타입: {type(e).__name__}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+def generate_cover_letter_preview_with_llm(persona_data: dict, job_data: dict) -> dict:
+    """
+    페르소나 데이터와 공고 데이터를 기반으로 자기소개서 미리보기를 생성합니다.
+    
+    Args:
+        persona_data (dict): 페르소나 데이터
+        job_data (dict): 공고 데이터
+        
+    Returns:
+        dict: 자기소개서 미리보기 생성 결과
+    """
+    logger.info(f"🤖 LLM 자기소개서 미리보기 생성 시작")
+    
+    try:
+        # Gemini 서비스 가져오기
+        from core.services.gemini_service import get_gemini_service
+        gemini_service = get_gemini_service()
+        
+        # 페르소나 정보 추출
+        school_name = persona_data.get('school_name', '')
+        major = persona_data.get('major', '')
+        job_category = persona_data.get('job_category', '')
+        job_role = persona_data.get('job_role', '')
+        skills = persona_data.get('skills', [])
+        certifications = persona_data.get('certifications', [])
+        final_evaluation = persona_data.get('final_evaluation', '')
+        
+        # 공고 정보 추출
+        company_name = job_data.get('company_name', '')
+        job_title = job_data.get('job_title', '')
+        job_description = job_data.get('job_description', '')
+        requirements = job_data.get('requirements', [])
+        
+        # 프롬프트 생성
+        prompt = f"""
+당신은 취업 전문가입니다. 주어진 페르소나 정보와 공고 정보를 바탕으로 {company_name}의 {job_title} 포지션에 대한 자기소개서를 작성해주세요.
+
+## 페르소나 정보
+- 학력: {school_name} {major}
+- 직무 분야: {job_category}
+- 직무 역할: {job_role}
+- 보유 기술: {', '.join(skills) if skills else '없음'}
+- 자격증: {', '.join(certifications) if certifications else '없음'}
+- 역량 평가: {final_evaluation if final_evaluation else '없음'}
+
+## 공고 정보
+- 회사명: {company_name}
+- 직무명: {job_title}
+- 직무 설명: {job_description}
+- 요구사항: {', '.join(requirements) if requirements else '없음'}
+
+## 요구사항
+1. 자기소개서는 2-3개의 문단으로 구성해주세요.
+2. 각 문단은 3-4문장 정도로 간결하게 작성해주세요.
+3. 페르소나의 강점과 공고의 요구사항을 연결하여 작성해주세요.
+4. 구체적인 경험이나 성과를 포함해주세요.
+5. 해당 회사와 직무에 대한 관심과 열정을 표현해주세요.
+
+## 응답 형식
+다음과 같은 형식으로 응답해주세요:
+
+저는 {school_name} {major}에서 4년간 체계적인 교육을 받으며...
+
+[두 번째 문단]
+
+[세 번째 문단]
+
+이러한 경험과 역량을 바탕으로 {company_name}의 {job_title}에서...
+"""
+        
+        # LLM 호출
+        logger.info(f"📤 Gemini API 호출 중...")
+        response = gemini_service.generate_text(prompt)
+        
+        if response and response.strip():
+            logger.info(f"✅ 자기소개서 미리보기 생성 완료")
+            logger.info(f"   📝 길이: {len(response)}자")
+            
+            return {
+                'success': True,
+                'cover_letter': response.strip()
+            }
+        else:
+            logger.error(f"❌ LLM 응답이 비어있음")
+            return {
+                'success': False,
+                'error': 'LLM 응답이 비어있습니다.'
+            }
+            
+    except Exception as e:
+        logger.error(f"❌ 자기소개서 미리보기 생성 중 오류 발생")
         logger.error(f"   🔍 오류 내용: {str(e)}")
         logger.error(f"   📍 오류 타입: {type(e).__name__}")
         return {
