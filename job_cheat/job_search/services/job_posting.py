@@ -19,12 +19,18 @@ def add_job_to_firestore(job_data: dict) -> str:
     
     TODO: 삭제 예정 - 테스트용으로만 사용
     """
-    db = firestore.client()
-    collection_ref = db.collection('job_postings')
-    update_time, doc_ref = collection_ref.add(job_data)
-    
-    print(f"Firestore에 문서 추가 완료. ID: {doc_ref.id}")
-    return doc_ref.id
+    logger.info(f"Firestore에 공고 추가 시작: {job_data}")
+    try:
+        db = firestore.client()
+        collection_ref = db.collection('job_postings')
+        update_time, doc_ref = collection_ref.add(job_data)
+        
+        logger.info(f"Firestore에 문서 추가 완료. ID: {doc_ref.id}")
+        print(f"Firestore에 문서 추가 완료. ID: {doc_ref.id}")
+        return doc_ref.id
+    except Exception as e:
+        logger.error(f"Firestore에 공고 추가 실패: {str(e)}")
+        raise e
 
 # --------------------------------------------------------------------------
 # 1. Firestore에서 모든 공고 불러오기
@@ -37,14 +43,20 @@ def get_all_jobs_from_firestore() -> list[tuple[str, dict]]:
     
     TODO: 삭제 예정 - 테스트용으로만 사용
     """
-    db = firestore.client()
-    collection_ref = db.collection('job_postings')
-    docs = collection_ref.stream()
-    
-    job_list = [(doc.id, doc.to_dict()) for doc in docs]
-    
-    print(f"Firestore에서 {len(job_list)}개의 공고를 불러왔습니다.")
-    return job_list
+    logger.info("Firestore에서 모든 공고 조회 시작")
+    try:
+        db = firestore.client()
+        collection_ref = db.collection('job_postings')
+        docs = collection_ref.stream()
+        
+        job_list = [(doc.id, doc.to_dict()) for doc in docs]
+        
+        logger.info(f"Firestore에서 {len(job_list)}개의 공고를 불러왔습니다.")
+        print(f"Firestore에서 {len(job_list)}개의 공고를 불러왔습니다.")
+        return job_list
+    except Exception as e:
+        logger.error(f"Firestore에서 공고 조회 실패: {str(e)}")
+        raise e
 
 # --------------------------------------------------------------------------
 # 2. 공고 데이터를 평문 텍스트로 변환
@@ -59,13 +71,15 @@ def preprocess_job_to_text(job_data: dict) -> str:
     
     TODO: 삭제 예정 - 테스트용으로만 사용
     """
-    #requirements = '; '.join(job_data.get('requirements', []))
-    #preferred = '; '.join(job_data.get('preferred', []))
-    required_qualifications = '; '.join(job_data.get('required_qualifications', []))
-    preferred_qualifications = '; '.join(job_data.get('preferred_qualifications', []))
-    ideal_candidate = '; '.join(job_data.get('ideal_candidate', []))
+    logger.info(f"공고 데이터 전처리 시작: {job_data.get('title', 'N/A')}")
+    try:
+        #requirements = '; '.join(job_data.get('requirements', []))
+        #preferred = '; '.join(job_data.get('preferred', []))
+        required_qualifications = '; '.join(job_data.get('required_qualifications', []))
+        preferred_qualifications = '; '.join(job_data.get('preferred_qualifications', []))
+        ideal_candidate = '; '.join(job_data.get('ideal_candidate', []))
 
-    plain_text = f"""
+        plain_text = f"""
 제목: {job_data.get('title', '')}
 업무 내용: {job_data.get('job_description', '')}
 필수 자격: {required_qualifications}
@@ -74,7 +88,11 @@ def preprocess_job_to_text(job_data: dict) -> str:
 """
 #필수 요구사항: {requirements}
 #우대사항: {preferred}
-    return plain_text.strip()
+        logger.info(f"공고 데이터 전처리 완료: {len(plain_text)}자")
+        return plain_text.strip()
+    except Exception as e:
+        logger.error(f"공고 데이터 전처리 실패: {str(e)}")
+        raise e
 
 # --------------------------------------------------------------------------
 # 3 & 4. 벡터화하여 Pinecone에 저장 (메인 파이프라인 함수)
@@ -87,27 +105,34 @@ def vectorize_and_upsert_to_pinecone(job_list: list[tuple[str, dict]]):
     
     TODO: 삭제 예정 - 테스트용으로만 사용
     """
-    model = SentenceTransformer('jhgan/ko-sroberta-multitask')
-    pinecone = Pinecone(api_key=os.getenv('PINECONE_API_KEY'))
-    index = pinecone.Index('job-postings')
+    logger.info(f"공고 벡터화 및 Pinecone 저장 시작: {len(job_list)}개 공고")
+    try:
+        model = SentenceTransformer('jhgan/ko-sroberta-multitask')
+        pinecone = Pinecone(api_key=os.getenv('PINECONE_API_KEY'))
+        index = pinecone.Index('job-postings')
 
-    vectors_to_upsert = []
-    for job_id, job_data in job_list:
-        plain_text = preprocess_job_to_text(job_data)
-        vector = model.encode(plain_text).tolist()
+        vectors_to_upsert = []
+        for job_id, job_data in job_list:
+            plain_text = preprocess_job_to_text(job_data)
+            vector = model.encode(plain_text).tolist()
+            
+            vectors_to_upsert.append({
+                'id': job_id,
+                'values': vector,
+                'metadata': {
+                    'firestore_id': job_id,
+                    'category': job_data.get('job_category', 'N/A'),
+                    'title': job_data.get('job_title', 'N/A')
+                }
+            })
         
-        vectors_to_upsert.append({
-            'id': job_id,
-            'values': vector,
-            'metadata': {
-                'firestore_id': job_id,
-                'category': job_data.get('job_category', 'N/A'),
-                'title': job_data.get('job_title', 'N/A')
-            }
-        })
-    
-    if vectors_to_upsert:
-        index.upsert(vectors=vectors_to_upsert)
-        print(f"Pinecone에 {len(vectors_to_upsert)}개의 벡터를 저장했습니다.")
-    else:
-        print("Pinecone에 저장할 데이터가 없습니다.")
+        if vectors_to_upsert:
+            index.upsert(vectors=vectors_to_upsert)
+            logger.info(f"Pinecone에 {len(vectors_to_upsert)}개의 벡터를 저장했습니다.")
+            print(f"Pinecone에 {len(vectors_to_upsert)}개의 벡터를 저장했습니다.")
+        else:
+            logger.warning("Pinecone에 저장할 데이터가 없습니다.")
+            print("Pinecone에 저장할 데이터가 없습니다.")
+    except Exception as e:
+        logger.error(f"공고 벡터화 및 Pinecone 저장 실패: {str(e)}")
+        raise e
