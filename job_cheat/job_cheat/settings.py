@@ -77,13 +77,25 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https:\/\/[a-z0-9\-]+\.ngrok-free\.app$",
     r"^https:\/\/[a-z0-9\-]+\.ngrok\.io$",
     r"^http:\/\/192\.168\.12\.1(?::\d+)?$",
+    r"^http:\/\/localhost(?::\d+)?$",  # localhost 모든 포트 허용
+    r"^http:\/\/127\.0\.0\.1(?::\d+)?$",  # 127.0.0.1 모든 포트 허용
 ]
 
 # 프론트가 로컬이면 그대로 허용
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
+    'http://localhost:8080',  # 추가 포트들
+    'http://localhost:3001',
+    'http://localhost:4000',
 ]
+
+# 개발 환경에서 모든 Origin 허용 (디버깅용)
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOW_CREDENTIALS = True
 
 # Application definition
 
@@ -113,7 +125,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # CORS 미들웨어를 최상단에 배치
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -277,14 +289,27 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS 커스텀 헤더 허용: ngrok 경고 우회 헤더 포함
+# CORS 커스텀 헤더 허용: ngrok 경고 우회 헤더 및 프론트엔드 커스텀 헤더 포함
 from corsheaders.defaults import default_headers
 
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'ngrok-skip-browser-warning',
+    'Authorization',  # Firebase 인증 토큰
+    'Content-Type',   # JSON 요청
+    'Accept',         # 응답 타입
+    'X-Requested-With',  # AJAX 요청
+    'X-CSRFToken',    # CSRF 토큰
+    'X-API-Key',      # API 키 (필요시)
+    'X-Client-Version',  # 클라이언트 버전
+    'X-Platform',     # 플랫폼 정보
+    'X-Device-ID',    # 디바이스 ID
+    'X-User-Agent',   # 커스텀 User-Agent
+    'X-Request-ID',   # 요청 추적 ID
+    'X-Timestamp',    # 타임스탬프
+    'X-Signature',    # 요청 서명 (필요시)
 ]
 
-# CORS 추가 설정 (파일 업로드를 위한)
+# CORS 추가 설정 (파일 업로드 및 커스텀 헤더를 위한)
 CORS_ALLOW_CREDENTIALS = True  # 쿠키 및 인증 헤더 허용
 CORS_PREFLIGHT_MAX_AGE = 86400  # 24시간 (preflight 캐시 시간)
 
@@ -296,7 +321,32 @@ CORS_ALLOW_METHODS = [
     'PATCH',
     'POST',
     'PUT',
+    'HEAD',  # HEAD 메서드 추가
 ]
+
+# CORS preflight 요청 처리 개선
+CORS_ALLOW_ALL_ORIGINS = False  # 보안을 위해 False로 유지
+CORS_ALLOW_PRIVATE_NETWORK_ACCESS = True  # 로컬 네트워크 접근 허용
+
+# CORS 응답 헤더 노출 (프론트엔드에서 접근 가능한 헤더)
+CORS_EXPOSE_HEADERS = [
+    'Content-Type',
+    'X-CSRFToken',
+    'X-Request-ID',
+    'X-Total-Count',
+    'X-Page-Count',
+    'X-Next-Page',
+    'X-Prev-Page',
+]
+
+# CORS preflight 요청 자동 처리
+CORS_PREFLIGHT_CACHE_TIMEOUT = 86400  # 24시간 캐시
+
+# CORS 디버깅 설정 (개발 환경에서만)
+if DEBUG:
+    CORS_DEBUG = True  # CORS 디버깅 로그 활성화
+    CORS_ALLOW_ALL_ORIGINS = True  # 개발 환경에서 모든 Origin 허용
+    CORS_ALLOW_CREDENTIALS = True
 
 # 파일 업로드 관련 설정 (200MB 대용량 파일 streaming 처리)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024  # 200MB (메모리에 올리지 않고 임시 파일로 저장)
@@ -373,47 +423,10 @@ LOGGING = {
             'level': 'WARNING',  # Broken pipe 오류를 WARNING으로 처리
             'propagate': False,
         },
-    },
-}
-
-
-# 로깅 설정 (Broken pipe 오류 처리)
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-            'style': '{',
-        },
-        'simple': {
-            'format': '{levelname} {message}',
-            'style': '{',
-        },
-    },
-    'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': 'django.log',
-            'formatter': 'verbose',
-        },
-        'console': {
-            'level': 'INFO',
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
-        },
-    },
-    'loggers': {
-        'django': {
+        'corsheaders': {
             'handlers': ['console'],
-            'level': 'INFO',
+            'level': 'DEBUG',  # CORS 디버깅 로그
             'propagate': True,
-        },
-        'django.request': {
-            'handlers': ['console'],
-            'level': 'WARNING',  # Broken pipe 오류를 WARNING으로 처리
-            'propagate': False,
         },
     },
 }
