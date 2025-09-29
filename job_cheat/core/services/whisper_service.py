@@ -45,6 +45,7 @@ class WhisperService:
             
             text = transcript.text.strip()
             logger.info(f"음성 파일 변환 완료: {len(text)}자")
+            logger.info(f"📝 변환된 텍스트 내용: {text[:200] + '...' if len(text) > 200 else text}")
             return text
             
         except Exception as e:
@@ -58,20 +59,28 @@ class WhisperService:
     ) -> str:
         """WebM 파일을 텍스트로 변환합니다."""
         try:
+            logger.info(f"🎤 WebM 파일 STT 변환 시작")
+            logger.info(f"   📁 파일명: {getattr(webm_file, 'name', 'Unknown')}")
+            logger.info(f"   📏 파일 크기: {getattr(webm_file, 'size', 'Unknown')} bytes")
+            
             # 임시 파일로 저장
             with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as temp_file:
                 for chunk in webm_file.chunks():
                     temp_file.write(chunk)
                 temp_file_path = temp_file.name
             
+            logger.info(f"📁 임시 파일 생성 완료: {temp_file_path}")
+            
             try:
                 # 음성 변환
                 text = await self.transcribe_audio(temp_file_path, language)
+                logger.info(f"✅ WebM 파일 STT 변환 완료")
                 return text
             finally:
                 # 임시 파일 삭제
                 if os.path.exists(temp_file_path):
                     os.unlink(temp_file_path)
+                    logger.info(f"🗑️ 임시 파일 삭제 완료: {temp_file_path}")
                     
         except Exception as e:
             logger.error(f"WebM 파일 변환 실패: {e}")
