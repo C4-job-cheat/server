@@ -392,7 +392,7 @@ async def generate_cover_letter_preview_with_llm(persona_data: dict, job_data: d
         
         # 프롬프트 생성
         prompt = f"""
-당신은 취업 전문가입니다. 주어진 페르소나 정보와 공고 정보를 바탕으로 {company_name}의 {job_title} 포지션에 대한 자기소개서를 작성해주세요.
+당신은 취업 전문가입니다. 주어진 페르소나 정보와 공고 정보를 바탕으로 {company_name}의 {job_title} 포지션에 대한 간단한 자기소개서를 3개의 문단으로 짧게 작성해주세요.
 
 ## 페르소나 정보
 - 학력: {school_name} {major}
@@ -407,31 +407,26 @@ async def generate_cover_letter_preview_with_llm(persona_data: dict, job_data: d
 - 직무명: {job_title}
 - 직무 설명: {job_description}
 - 요구사항: {', '.join(requirements) if requirements else '없음'}
-
-## 요구사항
-1. 자기소개서는 2-3개의 문단으로 구성해주세요.
-2. 각 문단은 3-4문장 정도로 간결하게 작성해주세요.
-3. 페르소나의 강점과 공고의 요구사항을 연결하여 작성해주세요.
-4. 구체적인 경험이나 성과를 포함해주세요.
-5. 해당 회사와 직무에 대한 관심과 열정을 표현해주세요.
-
-## 응답 형식
-다음과 같은 형식으로 응답해주세요:
-
-저는 {school_name} {major}에서 4년간 체계적인 교육을 받으며...
-
-[두 번째 문단]
-
-[세 번째 문단]
-
-이러한 경험과 역량을 바탕으로 {company_name}의 {job_title}에서...
 """
         
         # LLM 호출
         logger.info(f"📤 Gemini API 호출 중...")
-        response = await gemini_service.generate_structured_response(
-            prompt, response_format="text"
-        )
+        logger.info(f"🔗 Gemini 서비스 상태: {type(gemini_service)}")
+        logger.info(f"📝 전달할 프롬프트 길이: {len(prompt)}자")
+        logger.info(f"📋 프롬프트 미리보기: {prompt[:200]}...")
+        
+        try:
+            response = await gemini_service.generate_structured_response(
+                prompt, response_format="text"
+            )
+            logger.info(f"✅ Gemini API 응답 수신 완료")
+            logger.info(f"📊 응답 타입: {type(response)}")
+            logger.info(f"📝 응답 길이: {len(response) if response else 0}자")
+        except Exception as api_error:
+            logger.error(f"❌ Gemini API 호출 중 오류 발생")
+            logger.error(f"🔍 오류 타입: {type(api_error).__name__}")
+            logger.error(f"📋 오류 내용: {str(api_error)}")
+            raise api_error
         
         if response and response.strip():
             logger.info(f"✅ 자기소개서 미리보기 생성 완료")

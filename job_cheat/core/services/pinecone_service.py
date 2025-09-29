@@ -73,15 +73,38 @@ class PineconeService:
         include_metadata: bool = True,
         filter: Optional[dict] = None,
     ) -> dict:
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"🔍 Pinecone 유사도 검색 시작")
+        logger.info(f"   📊 벡터 차원: {len(vector) if vector else 0}")
+        logger.info(f"   📋 namespace: {namespace}")
+        logger.info(f"   📋 top_k: {top_k}")
+        logger.info(f"   📋 include_metadata: {include_metadata}")
+        logger.info(f"   📋 filter: {filter}")
+        
         try:
-            return self.index.query(
+            logger.info(f"📤 Pinecone index.query 호출 시작")
+            logger.info(f"   🔗 index.query 호출")
+            
+            result = self.index.query(
                 vector=vector,
                 top_k=top_k,
                 include_metadata=include_metadata,
                 namespace=namespace,
                 filter=filter,
             )
+            
+            logger.info(f"📥 Pinecone 검색 완료")
+            logger.info(f"   📊 결과 타입: {type(result)}")
+            logger.info(f"   📊 매치 수: {len(result.get('matches', [])) if result and 'matches' in result else 0}")
+            logger.info(f"   📊 검색 결과: {result}")
+            
+            return result
+            
         except Exception as exc:
+            logger.error(f"❌ Pinecone query 실패: {exc}")
+            logger.error(f"   🔍 오류 타입: {type(exc).__name__}")
             raise PineconeServiceError(f"Pinecone query 실패: {exc}") from exc
 
     def delete_namespace(self, namespace: str) -> None:

@@ -45,25 +45,57 @@ class CohereService:
     ) -> List[List[float]]:
         """텍스트 리스트를 Cohere 임베딩으로 변환한다."""
 
+        logger.info(f"🔗 Cohere 임베딩 서비스 시작")
+        logger.info(f"   📝 입력 텍스트 수: {len(list(texts)) if texts else 0}")
+        logger.info(f"   📋 모델: {model or self._default_model}")
+        logger.info(f"   📋 입력 타입: {input_type}")
+
         text_list = [text for text in texts if text and text.strip()]
+        logger.info(f"   📊 필터링된 텍스트 수: {len(text_list)}")
+        
         if not text_list:
+            logger.warning(f"⚠️ 빈 텍스트 리스트")
             return []
 
         chosen_model = model or self._default_model
+        logger.info(f"   🎯 사용할 모델: {chosen_model}")
 
         try:
-            response = await sync_to_async(self._client.embed)(
+            logger.info(f"📤 Cohere API 호출 시작")
+            logger.info(f"   🔗 _client.embed 호출")
+            logger.info(f"   📋 texts: {len(text_list)}개")
+            logger.info(f"   📋 model: {chosen_model}")
+            logger.info(f"   📋 input_type: {input_type}")
+            
+            # sync_to_async 대신 직접 호출 (Gemini API와 같은 방식)
+            logger.info(f"🔄 Cohere 클라이언트 직접 호출 시작")
+            response = self._client.embed(
                 texts=text_list,
                 model=chosen_model,
                 input_type=input_type,
             )
+            logger.info(f"✅ Cohere 클라이언트 직접 호출 완료")
+            
+            logger.info(f"📥 Cohere API 응답 수신")
+            logger.info(f"   📊 응답 타입: {type(response)}")
+            
         except Exception as exc:
+            logger.error(f"❌ Cohere 임베딩 생성 실패: {exc}")
+            logger.error(f"   🔍 오류 타입: {type(exc).__name__}")
             logger.exception("Cohere 임베딩 생성 실패")
             raise CohereServiceError(f"임베딩 생성 실패: {exc}") from exc
 
         embeddings = getattr(response, "embeddings", None)
+        logger.info(f"🔍 응답에서 embeddings 추출")
+        logger.info(f"   📊 embeddings 존재 여부: {embeddings is not None}")
+        
         if embeddings is None:
+            logger.error(f"❌ Cohere 응답에 embeddings 필드가 없음")
             raise CohereServiceError("Cohere 응답에 embeddings 필드가 없습니다.")
+
+        logger.info(f"✅ Cohere 임베딩 생성 완료")
+        logger.info(f"   📊 임베딩 수: {len(embeddings) if embeddings else 0}")
+        logger.info(f"   📊 임베딩 차원: {len(embeddings[0]) if embeddings and embeddings[0] else 0}")
 
         return embeddings
 

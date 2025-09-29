@@ -36,39 +36,61 @@ def add_job_to_scrap(user_id: str, persona_id: str, job_posting_id: str) -> Dict
         스크랩 결과
     """
     try:
-        logger.info(f"스크랩 추가: user_id={user_id}, persona_id={persona_id}, job_posting_id={job_posting_id}")
+        logger.info(f"📌 스크랩 추가 서비스 시작")
+        logger.info(f"   👤 user_id: {user_id}")
+        logger.info(f"   🎭 persona_id: {persona_id}")
+        logger.info(f"   💼 job_posting_id: {job_posting_id}")
         
+        logger.info(f"🔗 Firestore 클라이언트 연결 시작")
         db = firestore.client()
+        logger.info(f"✅ Firestore 클라이언트 연결 완료")
         
         # 페르소나 문서 참조
+        logger.info(f"📋 페르소나 문서 참조 생성")
         persona_ref = (
             db.collection(USER_COLLECTION)
             .document(user_id)
             .collection(PERSONA_SUBCOLLECTION)
             .document(persona_id)
         )
+        logger.info(f"   📍 경로: users/{user_id}/personas/{persona_id}")
         
         # 페르소나 데이터 조회
+        logger.info(f"📤 페르소나 데이터 조회 시작")
         persona_doc = persona_ref.get()
+        
         if not persona_doc.exists:
+            logger.error(f"❌ 페르소나 문서가 존재하지 않음: {persona_id}")
             raise ScrapServiceError(f"페르소나를 찾을 수 없습니다: {persona_id}")
         
+        logger.info(f"✅ 페르소나 문서 조회 완료")
         persona_data = persona_doc.to_dict()
         scrap_list = persona_data.get('scrap', [])
+        logger.info(f"   📊 기존 스크랩 목록 길이: {len(scrap_list)}")
+        logger.info(f"   📋 기존 스크랩 목록: {scrap_list}")
         
         # 중복 체크
+        logger.info(f"🔍 중복 체크 시작")
         if job_posting_id in scrap_list:
+            logger.warning(f"⚠️ 이미 스크랩된 공고: {job_posting_id}")
             raise ScrapServiceError("이미 스크랩된 공고입니다.")
         
+        logger.info(f"✅ 중복 체크 통과")
+        
         # 스크랩 목록에 추가
+        logger.info(f"📝 스크랩 목록에 추가 시작")
         scrap_list.append(job_posting_id)
+        logger.info(f"   📊 추가 후 스크랩 목록 길이: {len(scrap_list)}")
+        logger.info(f"   📋 추가 후 스크랩 목록: {scrap_list}")
         
         # 페르소나 문서 업데이트
+        logger.info(f"💾 페르소나 문서 업데이트 시작")
         persona_ref.update({
             'scrap': scrap_list
         })
+        logger.info(f"✅ 페르소나 문서 업데이트 완료")
         
-        logger.info(f"스크랩 추가 완료: {job_posting_id}")
+        logger.info(f"🎉 스크랩 추가 완료: {job_posting_id}")
         
         return {
             "success": True,
