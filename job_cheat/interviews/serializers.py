@@ -3,7 +3,6 @@ from rest_framework import serializers
 
 class InterviewHistoryRequestSerializer(serializers.Serializer):
     """면접 기록 조회 요청 시리얼라이저."""
-    user_id = serializers.CharField(max_length=100, help_text="사용자 ID")
     persona_id = serializers.CharField(max_length=100, help_text="페르소나 ID")
 
 
@@ -29,7 +28,6 @@ class InterviewHistoryResponseSerializer(serializers.Serializer):
 
 class InterviewPreparationRequestSerializer(serializers.Serializer):
     """면접 준비 데이터 요청 시리얼라이저."""
-    user_id = serializers.CharField(max_length=100, help_text="사용자 ID")
     persona_id = serializers.CharField(max_length=100, help_text="페르소나 ID")
 
 
@@ -53,7 +51,6 @@ class CoverLetterSummarySerializer(serializers.Serializer):
 
 class InterviewQuestionGenerationRequestSerializer(serializers.Serializer):
     """면접 질문 생성 요청 시리얼라이저."""
-    user_id = serializers.CharField(max_length=100, help_text="사용자 ID")
     persona_id = serializers.CharField(max_length=100, help_text="페르소나 ID")
     cover_letter_id = serializers.CharField(
         max_length=100, 
@@ -83,7 +80,6 @@ class InterviewQuestionGenerationResponseSerializer(serializers.Serializer):
 
 class AnswerSubmissionRequestSerializer(serializers.Serializer):
     """답변 제출 요청 시리얼라이저."""
-    user_id = serializers.CharField(max_length=100, help_text="사용자 ID")
     persona_id = serializers.CharField(max_length=100, help_text="페르소나 ID")
     interview_session_id = serializers.CharField(max_length=100, help_text="면접 세션 ID")
     question_id = serializers.CharField(max_length=100, help_text="질문 ID")
@@ -94,7 +90,6 @@ class AnswerSubmissionRequestSerializer(serializers.Serializer):
 
 class VoiceAnswerSubmissionRequestSerializer(serializers.Serializer):
     """음성 답변 제출 요청 시리얼라이저."""
-    user_id = serializers.CharField(max_length=100, help_text="사용자 ID")
     persona_id = serializers.CharField(max_length=100, help_text="페르소나 ID")
     interview_session_id = serializers.CharField(max_length=100, help_text="면접 세션 ID")
     question_id = serializers.CharField(max_length=100, help_text="질문 ID")

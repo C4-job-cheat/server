@@ -61,15 +61,15 @@ COMPETENCY_EVALUATION_PROMPT = """
 {relevant_conversations}
 
 ## 평가 기준 (10점 만점)
-- 9-10점: 해당 역량에서 전문가 수준의 능력을 보여줌
-- 7-8점: 해당 역량에서 숙련된 수준의 능력을 보여줌
-- 5-6점: 해당 역량에서 기본적인 수준의 능력을 보여줌
-- 3-4점: 해당 역량에서 미숙한 수준의 능력을 보여줌
-- 1-2점: 해당 역량에서 초보 수준의 능력을 보여줌
+- 90-100점: 해당 역량에서 전문가 수준의 능력을 보여줌
+- 70-89점: 해당 역량에서 숙련된 수준의 능력을 보여줌
+- 50-69점: 해당 역량에서 기본적인 수준의 능력을 보여줌
+- 30-49점: 해당 역량에서 미숙한 수준의 능력을 보여줌
+- 10-29점: 해당 역량에서 초보 수준의 능력을 보여줌
 
 ## 응답 형식 (JSON)
 {{
-  "score": 정수점수(1-10),
+  "score": 정수점수(1-100),
   "confidence": "매우높음|높음|보통|낮음|매우낮음 중 하나",
   "reasoning": "점수 근거 설명",
   "strong_signals": ["긍정 신호 1", "긍정 신호 2"],
@@ -230,12 +230,20 @@ class RAGCompetencyEvaluator:
     def _resolve_competencies(self, persona: Dict[str, Any]) -> List[Dict[str, Any]]:
         current = persona.get("core_competencies") or []
         if current:
+            logger.info(f"📋 페르소나에 저장된 core_competencies 사용: {len(current)}개")
+            logger.info(f"   📊 저장된 역량: {[comp.get('name', 'Unknown') for comp in current]}")
             return current
 
         job_category = persona.get("job_category", "")
         if not job_category:
+            logger.warning("❌ job_category가 없어서 빈 리스트 반환")
             return []
-        return self.job_competencies.get_core_competencies_by_job_category(job_category)
+        
+        logger.info(f"📤 직군별 핵심역량 조회: {job_category}")
+        competencies = self.job_competencies.get_core_competencies_by_job_category(job_category)
+        logger.info(f"📥 직군별 핵심역량 조회 결과: {len(competencies)}개")
+        logger.info(f"   📊 조회된 역량: {[comp.get('name', 'Unknown') for comp in competencies]}")
+        return competencies
 
     def _build_query(self, name: str, description: str) -> str:
         parts = [part.strip() for part in [name, description] if part and part.strip()]
@@ -424,7 +432,7 @@ class RAGCompetencyEvaluator:
             score = int(raw_score)
         except (TypeError, ValueError):
             score = 0
-        score = max(1, min(10, score)) if score else 5
+        score = max(1, min(100, score)) if score else 50
         return score
 
 

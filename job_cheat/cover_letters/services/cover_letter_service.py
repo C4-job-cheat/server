@@ -202,16 +202,16 @@ class CoverLetterService:
         query_parts = []
         
         if company_name:
-            query_parts.append(f"{company_name} 지원")
+            query_parts.append(f"{company_name}")
         
         if job_category:
-            query_parts.append(f"{job_category} 분야")
+            query_parts.append(f"{job_category}")
         
         if job_role:
-            query_parts.append(f"{job_role} 역할")
+            query_parts.append(f"{job_role}")
         
         if strengths:
-            query_parts.append(f"강점 {strengths}")
+            query_parts.append(f"{strengths}")
         
         # 자기소개서에 도움이 될 만한 대화 검색
         query_parts.extend([
@@ -221,7 +221,11 @@ class CoverLetterService:
             "성장",
             "문제 해결",
             "리더십",
-            "협업"
+            "협업",
+            "기술",
+            "목표",
+            "성격",
+            "가치관"
         ])
         
         return " ".join(query_parts)
@@ -245,7 +249,7 @@ class CoverLetterService:
         
         # 스타일별 가이드라인
         style_guidelines = {
-            "experience": "구체적인 프로젝트 경험, 성과, 도전과제 해결 과정을 중심으로 작성하세요. STAR 방법론(상황-과제-행동-결과)을 활용하세요.",
+            "experience": "구체적인 프로젝트 경험, 성과, 도전과제 해결 과정을 중심으로 작성하세요.",
             "knowledge": "전문 지식, 기술적 이해도, 학습 과정을 중심으로 작성하세요. 이론적 배경과 실무 적용 사례를 강조하세요.",
             "creative": "독창적인 아이디어, 혁신적 사고, 창의적 문제 해결 과정을 중심으로 작성하세요. 상상력과 비전을 표현하세요."
         }
@@ -274,11 +278,11 @@ class CoverLetterService:
 
 ## 요구사항
 1. 자기소개서는 여러개의 문단으로 구성해주세요.
-2. 각 문단마다 작성 이유를 포함해주세요. 
-3. RAG 검색 결과에서 찾은 관련 경험을 적절히 활용해주세요.
-4. 관련 대화 내역을 토대로 작성한 문단이라면 그 내용을 이유로 포함해주세요.
-5. 회사와 직무에 맞는 구체적인 경험과 성과를 포함해주세요.
-6. 진정성 있고 설득력 있는 내용으로 작성해주세요.
+2. 각 문단마다 자연스러운 연결과 전환을 포함해주세요.
+3. 각 문단마다 작성 이유를 포함해주세요. 
+4. RAG 검색 결과에서 찾은 관련 경험을 적절히 활용해주세요.
+5. 관련 대화 내역을 토대로 작성한 문단이라면 그 내용을 이유로 포함해주세요.
+6. 회사와 직무에 맞는 구체적인 경험과 성과를 포함해주세요.
 7. 스타일 가이드라인: {style_guide}
 
 ## 응답 형식

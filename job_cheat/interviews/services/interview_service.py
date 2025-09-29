@@ -52,20 +52,34 @@ class InterviewService:
         persona_id: str
     ) -> Dict[str, Any]:
         """면접 준비 데이터를 조회합니다 (페르소나 카드 + 자기소개서 목록)."""
+        logger.info(f"🎯 면접 준비 데이터 조회 시작")
+        logger.info(f"   👤 user_id: {user_id}")
+        logger.info(f"   🎭 persona_id: {persona_id}")
+        
         try:
             # 페르소나 데이터 조회
+            logger.info(f"📤 페르소나 데이터 조회 시작")
             from core.services.firebase_personas import get_persona_document
             persona_data = get_persona_document(user_id=user_id, persona_id=persona_id, db=self.db)
+            logger.info(f"📥 페르소나 데이터 수신 완료")
+            logger.info(f"   📊 페르소나 데이터: {persona_data}")
             
             # 페르소나 카드 생성
+            logger.info(f"🔧 페르소나 카드 생성 시작")
             from core.utils import create_persona_card
             persona_card = create_persona_card(persona_data)
+            logger.info(f"✅ 페르소나 카드 생성 완료")
+            logger.info(f"   📋 페르소나 카드: {persona_card}")
             
             # 자기소개서 목록 조회
+            logger.info(f"📤 자기소개서 목록 조회 시작")
             cover_letters = []
             try:
                 from cover_letters.services.cover_letter_service import get_cover_letters
                 cover_letters_data = await get_cover_letters(user_id, persona_id)
+                logger.info(f"📥 자기소개서 목록 수신 완료")
+                logger.info(f"   📊 자기소개서 수: {len(cover_letters_data) if cover_letters_data else 0}")
+                
                 cover_letters = [
                     {
                         "id": cl.get("id"),
@@ -76,21 +90,25 @@ class InterviewService:
                     }
                     for cl in cover_letters_data
                 ]
+                logger.info(f"✅ 자기소개서 목록 변환 완료")
+                logger.info(f"   📋 자기소개서 목록: {cover_letters}")
             except Exception as e:
-                logger.warning(f"자기소개서 목록 조회 실패: {e}")
+                logger.warning(f"⚠️ 자기소개서 목록 조회 실패: {e}")
                 cover_letters = []
             
-            logger.info(f"면접 준비 데이터 조회 완료: user_id={user_id}, persona_id={persona_id}")
-            return {
+            result = {
                 "persona_card": persona_card,
                 "cover_letters": cover_letters
             }
+            logger.info(f"✅ 면접 준비 데이터 조회 완료")
+            logger.info(f"   📊 결과: {result}")
+            return result
             
         except PersonaNotFoundError as exc:
-            logger.error(f"페르소나를 찾을 수 없습니다: {exc}")
+            logger.error(f"❌ 페르소나를 찾을 수 없습니다: {exc}")
             raise InterviewServiceError(f"페르소나를 찾을 수 없습니다: {exc}") from exc
         except Exception as exc:
-            logger.error(f"면접 준비 데이터 조회 중 오류: {exc}")
+            logger.error(f"❌ 면접 준비 데이터 조회 중 오류: {exc}")
             raise InterviewServiceError(f"면접 준비 데이터 조회 실패: {exc}") from exc
     
     async def generate_interview_questions(
@@ -101,33 +119,59 @@ class InterviewService:
         use_voice: bool = False
     ) -> Dict[str, Any]:
         """면접 질문을 생성합니다."""
+        logger.info(f"❓ 면접 질문 생성 시작")
+        logger.info(f"   👤 user_id: {user_id}")
+        logger.info(f"   🎭 persona_id: {persona_id}")
+        logger.info(f"   📄 cover_letter_id: {cover_letter_id}")
+        logger.info(f"   🎤 use_voice: {use_voice}")
+        
         try:
             # 페르소나 데이터 조회
+            logger.info(f"📤 페르소나 데이터 조회 시작")
             persona_data = get_persona_document(user_id=user_id, persona_id=persona_id, db=self.db)
+            logger.info(f"📥 페르소나 데이터 수신 완료")
+            logger.info(f"   📊 페르소나 데이터: {persona_data}")
             
             # 자기소개서 데이터 조회 (선택사항)
             cover_letter_data = None
             if cover_letter_id:
+                logger.info(f"📤 자기소개서 데이터 조회 시작")
                 try:
                     cover_letter_data = await get_cover_letter_detail(user_id, persona_id, cover_letter_id)
+                    logger.info(f"📥 자기소개서 데이터 수신 완료")
+                    logger.info(f"   📊 자기소개서 데이터: {cover_letter_data}")
                 except Exception as e:
-                    logger.warning(f"자기소개서 조회 실패: {e}")
+                    logger.warning(f"⚠️ 자기소개서 조회 실패: {e}")
+            else:
+                logger.info(f"📄 자기소개서 ID가 없어 자기소개서 데이터 조회 건너뜀")
             
             # RAG를 통한 대화 내역 조회
+            logger.info(f"📤 RAG 컨텍스트 조회 시작")
             rag_context = ""
             try:
                 rag_query = f"면접 질문으로 만들만한 프로젝트 경험, 문제 해결 경험, 팀워크 경험, 학습 경험"
+                logger.info(f"   🔍 RAG 쿼리: {rag_query}")
                 rag_context = await get_rag_context(user_id, rag_query)
+                logger.info(f"📥 RAG 컨텍스트 수신 완료")
+                logger.info(f"   📊 RAG 컨텍스트 길이: {len(rag_context) if rag_context else 0}")
             except Exception as e:
-                logger.warning(f"RAG 컨텍스트 조회 실패: {e}")
+                logger.warning(f"⚠️ RAG 컨텍스트 조회 실패: {e}")
             
             # Gemini를 통한 면접 질문 생성
+            logger.info(f"🤖 Gemini를 통한 면접 질문 생성 시작")
+            logger.info(f"   🔗 _generate_questions_with_gemini(persona_data, cover_letter_data, rag_context, use_voice)")
             questions = await self._generate_questions_with_gemini(
                 persona_data, cover_letter_data, rag_context, use_voice
             )
+            logger.info(f"✅ Gemini 질문 생성 완료")
+            logger.info(f"   📊 생성된 질문 수: {len(questions) if questions else 0}")
+            logger.info(f"   📋 질문 목록: {questions}")
             
             # 면접 세션 생성
+            logger.info(f"📝 면접 세션 생성 시작")
             interview_session_id = str(uuid.uuid4())
+            logger.info(f"   🆔 생성된 세션 ID: {interview_session_id}")
+            
             session_data = {
                 "id": interview_session_id,
                 "user_id": user_id,
@@ -145,8 +189,11 @@ class InterviewService:
                 "updated_at": datetime.now().isoformat(),
                 "completed_at": None
             }
+            logger.info(f"✅ 면접 세션 데이터 생성 완료")
+            logger.info(f"   📊 세션 데이터: {session_data}")
             
             # Firestore에 면접 세션 저장
+            logger.info(f"📤 Firestore에 면접 세션 저장 시작")
             session_ref = (
                 self.db.collection(USER_COLLECTION)
                 .document(user_id)
@@ -156,11 +203,16 @@ class InterviewService:
                 .document(interview_session_id)
             )
             session_ref.set(session_data)
+            logger.info(f"✅ 면접 세션 Firestore 저장 완료")
+            logger.info(f"   🔗 세션 경로: users/{user_id}/personas/{persona_id}/interview_sessions/{interview_session_id}")
             
             # 질문들을 Firestore에 저장
+            logger.info(f"📤 Firestore에 질문들 저장 시작")
             questions_data = []
             for i, question in enumerate(questions, 1):
                 question_id = str(uuid.uuid4())
+                logger.info(f"   📝 질문 {i} 처리 중 - question_id: {question_id}")
+                
                 question_data = {
                     "question_id": question_id,
                     "question_number": i,
@@ -182,6 +234,7 @@ class InterviewService:
                 # Firestore에 질문 저장
                 question_ref = session_ref.collection(QUESTIONS_SUBCOLLECTION).document(question_id)
                 question_ref.set(question_data)
+                logger.info(f"   ✅ 질문 {i} Firestore 저장 완료")
                 
                 questions_data.append({
                     "question_id": question_id,
@@ -190,14 +243,19 @@ class InterviewService:
                     "question_text": question["question_text"]
                 })
             
-            logger.info(f"면접 질문 생성 완료: user_id={user_id}, persona_id={persona_id}, session_id={interview_session_id}")
-            return {
+            logger.info(f"✅ 모든 질문 Firestore 저장 완료")
+            logger.info(f"   📊 저장된 질문 수: {len(questions_data)}")
+            
+            result = {
                 "interview_session_id": interview_session_id,
                 "question": questions_data[0]  # 첫 번째 질문만 반환
             }
+            logger.info(f"✅ 면접 질문 생성 완료")
+            logger.info(f"   📊 결과: {result}")
+            return result
             
         except Exception as exc:
-            logger.error(f"면접 질문 생성 중 오류: {exc}")
+            logger.error(f"❌ 면접 질문 생성 중 오류: {exc}")
             raise InterviewServiceError(f"면접 질문 생성 실패: {exc}") from exc
     
     async def _generate_questions_with_gemini(

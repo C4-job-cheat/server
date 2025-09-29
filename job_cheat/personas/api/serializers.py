@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Iterable
 
 from django.core.files.uploadedfile import UploadedFile
 from rest_framework import serializers
 
 from core.services.job_competencies import get_core_competencies_by_job_category
+
+logger = logging.getLogger(__name__)
 
 
 class _SkillListField(serializers.ListField):
@@ -129,6 +132,9 @@ class PersonaInputSerializer(serializers.Serializer):
         
         # 직군별 핵심 역량 조회
         core_competencies = get_core_competencies_by_job_category(job_category)
+        logger.info(f"📤 페르소나 생성 시 직군별 핵심역량 조회: {job_category}")
+        logger.info(f"📥 조회된 역량 개수: {len(core_competencies)}")
+        logger.info(f"   📊 조회된 역량: {[comp.get('name', 'Unknown') for comp in core_competencies]}")
         
         return {
             "job_category": job_category,
