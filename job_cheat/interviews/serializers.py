@@ -166,7 +166,6 @@ class InterviewSessionResultSerializer(serializers.Serializer):
 
 class QuestionDetailResponseSerializer(serializers.Serializer):
     """질문 상세 응답 시리얼라이저."""
-    id = serializers.CharField(help_text="질문 ID")
     question_id = serializers.CharField(help_text="질문 ID")
     question_number = serializers.IntegerField(help_text="질문 번호")
     question_type = serializers.CharField(help_text="질문 유형")
