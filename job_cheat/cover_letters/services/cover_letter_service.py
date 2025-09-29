@@ -69,12 +69,23 @@ class CoverLetterService:
             CoverLetterServiceError: 생성 실패 시
         """
         try:
-            logger.info(f"자기소개서 생성 시작: user_id={user_id}, persona_id={persona_id}, company={company_name}")
+            logger.info(f"📝 자기소개서 생성 서비스 시작")
+            logger.info(f"   👤 user_id: {user_id}")
+            logger.info(f"   🎭 persona_id: {persona_id}")
+            logger.info(f"   🏢 company_name: {company_name}")
+            logger.info(f"   💪 strengths: {strengths}")
+            logger.info(f"   🎯 activities: {activities}")
+            logger.info(f"   🎨 style: {style}")
             
             # 1. 사용자 페르소나 데이터 조회
+            logger.info(f"📤 페르소나 데이터 조회 시작")
+            logger.info(f"   🔗 get_persona_document(user_id={user_id}, persona_id={persona_id})")
             persona_data = get_persona_document(user_id=user_id, persona_id=persona_id, db=self.db)
+            logger.info(f"📥 페르소나 데이터 수신 완료")
+            logger.info(f"   📊 페르소나 데이터: {persona_data}")
             
             # 2. 페르소나에서 필요한 정보 추출
+            logger.info(f"🔧 페르소나 정보 추출 시작")
             job_category = persona_data.get('job_category', '')
             job_role = persona_data.get('job_role', '')
             skills = persona_data.get('skills', [])
@@ -83,13 +94,31 @@ class CoverLetterService:
             major = persona_data.get('major', '')
             final_evaluation = persona_data.get('final_evaluation', '')
             
+            logger.info(f"✅ 페르소나 정보 추출 완료")
+            logger.info(f"   💼 job_category: {job_category}")
+            logger.info(f"   🎯 job_role: {job_role}")
+            logger.info(f"   🛠️ skills: {skills}")
+            logger.info(f"   📜 certifications: {certifications}")
+            logger.info(f"   🎓 school_name: {school_name}")
+            logger.info(f"   📚 major: {major}")
+            logger.info(f"   ⭐ final_evaluation: {final_evaluation}")
+            
             # 3. RAG 검색을 위한 쿼리 생성
+            logger.info(f"🔍 RAG 검색 쿼리 생성 시작")
             rag_query = self._create_rag_query(company_name, job_category, job_role, strengths)
+            logger.info(f"✅ RAG 검색 쿼리 생성 완료")
+            logger.info(f"   📝 쿼리: {rag_query}")
             
             # 4. RAG 검색으로 관련 대화 내역 조회
+            logger.info(f"📤 RAG 검색 시작")
+            logger.info(f"   🔗 get_rag_context(query={rag_query}, user_id={user_id}, top_k=5)")
             rag_context = await get_rag_context(rag_query, user_id, top_k=5)
+            logger.info(f"📥 RAG 검색 완료")
+            logger.info(f"   📊 검색된 컨텍스트 수: {len(rag_context) if rag_context else 0}")
+            logger.info(f"   📋 RAG 컨텍스트: {rag_context}")
             
             # 5. 자기소개서 생성 프롬프트 구성
+            logger.info(f"🔧 자기소개서 프롬프트 구성 시작")
             prompt = self._create_cover_letter_prompt(
                 company_name=company_name,
                 job_category=job_category,
@@ -104,30 +133,52 @@ class CoverLetterService:
                 rag_context=rag_context,
                 style=style
             )
+            logger.info(f"✅ 자기소개서 프롬프트 구성 완료")
+            logger.info(f"   📝 프롬프트 길이: {len(prompt)}자")
+            logger.info(f"   📋 프롬프트 미리보기: {prompt[:200]}...")
             
             # 6. Gemini를 통해 자기소개서 생성
+            logger.info(f"📤 Gemini 자기소개서 생성 시작")
+            logger.info(f"   🔗 generate_structured_response(prompt, response_format='json')")
             cover_letter_json = await self.gemini_service.generate_structured_response(
                 prompt, response_format="json"
             )
+            logger.info(f"📥 Gemini 자기소개서 생성 완료")
+            logger.info(f"   📊 생성된 JSON 길이: {len(cover_letter_json)}자")
+            logger.info(f"   📋 생성된 JSON: {cover_letter_json}")
             
             # 7. JSON 파싱 및 검증
+            logger.info(f"🔧 JSON 파싱 시작")
             cover_letter_data = json.loads(cover_letter_json)
+            logger.info(f"✅ JSON 파싱 완료")
+            logger.info(f"   📊 파싱된 데이터: {cover_letter_data}")
             
             # 8. 글자 수 계산
+            logger.info(f"🔢 글자 수 계산 시작")
             total_text = ""
             for paragraph_data in cover_letter_data.get("cover_letter", []):
                 total_text += paragraph_data.get("paragraph", "")
             cover_letter_data["character_count"] = len(total_text)
+            logger.info(f"✅ 글자 수 계산 완료")
+            logger.info(f"   📊 총 글자 수: {cover_letter_data['character_count']}자")
             
             # 9. Firestore에 저장
+            logger.info(f"💾 Firestore 저장 시작")
+            logger.info(f"   🔗 _save_cover_letter(user_id={user_id}, persona_id={persona_id}, company_name={company_name})")
             saved_data = await self._save_cover_letter(
                 user_id=user_id,
                 persona_id=persona_id,
                 company_name=company_name,
                 cover_letter_data=cover_letter_data
             )
+            logger.info(f"✅ Firestore 저장 완료")
+            logger.info(f"   📊 저장된 데이터: {saved_data}")
             
-            logger.info(f"자기소개서 생성 완료: user_id={user_id}, company={company_name}")
+            logger.info(f"🎉 자기소개서 생성 완료")
+            logger.info(f"   👤 user_id: {user_id}")
+            logger.info(f"   🏢 company: {company_name}")
+            logger.info(f"   📝 글자 수: {cover_letter_data['character_count']}자")
+            
             return saved_data
             
         except PersonaNotFoundError as exc:

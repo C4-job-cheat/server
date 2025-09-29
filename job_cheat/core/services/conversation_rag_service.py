@@ -212,25 +212,47 @@ class ConversationRAGService:
             ConversationRAGServiceError: 검색 실패 시
         """
         try:
-            logger.info(f"RAG 컨텍스트 검색 시작: query='{query}', user_id='{user_id}'")
+            logger.info(f"🔍 RAG 컨텍스트 검색 시작")
+            logger.info(f"   📝 query: '{query}'")
+            logger.info(f"   👤 user_id: '{user_id}'")
+            logger.info(f"   🔢 top_k: {top_k}")
             
             # 1. 검색 단계: 쿼리 임베딩 및 유사도 검색
+            logger.info(f"📤 쿼리 임베딩 생성 시작")
+            logger.info(f"   🔗 cohere_service.embed_texts 호출")
+            logger.info(f"   📋 모델: embed-multilingual-v3.0")
+            logger.info(f"   📋 입력 타입: search_query")
+            
             query_embeddings = await self.cohere_service.embed_texts(
                 [query],
                 model="embed-multilingual-v3.0",
                 input_type="search_query"
             )
             
+            logger.info(f"📥 쿼리 임베딩 생성 완료")
+            logger.info(f"   📊 임베딩 수: {len(query_embeddings) if query_embeddings else 0}")
+            logger.info(f"   📊 임베딩 차원: {len(query_embeddings[0]) if query_embeddings and query_embeddings[0] else 0}")
+            
             if not query_embeddings:
+                logger.error(f"❌ 쿼리 임베딩 생성 실패")
                 raise ConversationRAGServiceError("쿼리 임베딩 생성 실패")
             
             # Pinecone에서 해당 사용자의 User 발화만 검색 (user_id namespace 사용)
+            logger.info(f"📤 Pinecone 유사도 검색 시작")
+            logger.info(f"   🔗 pinecone_service.query_similar 호출")
+            logger.info(f"   📋 top_k: {top_k}")
+            logger.info(f"   📋 include_metadata: True")
+            logger.info(f"   📋 namespace: {user_id}")
+            
             search_response = self.pinecone_service.query_similar(
                 query_embeddings[0],
                 top_k=top_k,
                 include_metadata=True,
                 namespace=user_id  # user_id를 namespace로 사용
             )
+            
+            logger.info(f"📥 Pinecone 검색 완료")
+            logger.info(f"   📊 검색 응답: {search_response}")
             
             matches = search_response.get('matches', [])
             if not matches:
