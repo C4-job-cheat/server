@@ -100,11 +100,117 @@ class ConversationRAGService:
             logger.error(f"대화 JSON 처리 실패: {exc}")
             raise ConversationRAGServiceError(f"대화 JSON 처리 실패: {exc}") from exc
     
+    def _filter_vectors_by_metadata_size(self, vectors: List[Dict[str, Any]], user_id: str) -> List[Dict[str, Any]]:
+        """
+        메타데이터 크기 제한(40KB)을 초과하는 벡터를 필터링합니다.
+        크기를 초과할 경우 대화 내역을 줄여가면서 재시도합니다.
+        
+        Args:
+            vectors: 처리할 벡터 리스트
+            user_id: 사용자 ID (로깅용)
+            
+        Returns:
+            필터링된 벡터 리스트
+        """
+        import json
+        
+        # Pinecone 메타데이터 크기 제한 (40KB)
+        MAX_METADATA_SIZE = 40 * 1024  # 40KB
+        
+        filtered_vectors = []
+        skipped_count = 0
+        
+        for vector in vectors:
+            try:
+                # 메타데이터를 JSON으로 직렬화하여 크기 확인
+                metadata_json = json.dumps(vector['metadata'], ensure_ascii=False)
+                metadata_size = len(metadata_json.encode('utf-8'))
+                
+                if metadata_size <= MAX_METADATA_SIZE:
+                    filtered_vectors.append(vector)
+                else:
+                    # 메타데이터 크기가 초과하는 경우 텍스트를 줄여서 재시도
+                    logger.warning(f"메타데이터 크기 초과: {metadata_size} bytes > {MAX_METADATA_SIZE} bytes")
+                    logger.warning(f"벡터 ID: {vector['id']}")
+                    
+                    # 텍스트를 줄여서 재시도
+                    reduced_vector = self._reduce_metadata_size(vector, MAX_METADATA_SIZE)
+                    if reduced_vector:
+                        filtered_vectors.append(reduced_vector)
+                        logger.info(f"메타데이터 크기 축소 성공: {vector['id']}")
+                    else:
+                        skipped_count += 1
+                        logger.warning(f"메타데이터 크기 축소 실패, 벡터 제외: {vector['id']}")
+                        
+            except Exception as exc:
+                logger.error(f"메타데이터 크기 확인 실패: {vector['id']}, 오류: {exc}")
+                skipped_count += 1
+        
+        if skipped_count > 0:
+            logger.warning(f"메타데이터 크기 제한으로 인해 {skipped_count}개 벡터가 제외되었습니다.")
+        
+        logger.info(f"메타데이터 크기 필터링 완료: {len(filtered_vectors)}/{len(vectors)}개 벡터 유지")
+        return filtered_vectors
+    
+    def _reduce_metadata_size(self, vector: Dict[str, Any], max_size: int) -> Optional[Dict[str, Any]]:
+        """
+        메타데이터 크기를 줄이기 위해 텍스트를 축소합니다.
+        
+        Args:
+            vector: 축소할 벡터
+            max_size: 최대 메타데이터 크기
+            
+        Returns:
+            축소된 벡터 또는 None (축소 실패 시)
+        """
+        import json
+        
+        # 텍스트 필드들을 축소할 수 있는 순서 (중요도 순)
+        text_fields = ['assistant_text', 'text']
+        
+        for field in text_fields:
+            if field not in vector['metadata']:
+                continue
+                
+            original_text = vector['metadata'][field]
+            if not original_text:
+                continue
+            
+            # 텍스트를 50%씩 줄여가면서 시도
+            reduction_ratio = 0.5
+            max_attempts = 5
+            
+            for attempt in range(max_attempts):
+                # 텍스트 축소
+                reduced_text = original_text[:int(len(original_text) * (reduction_ratio ** attempt))]
+                
+                # 축소된 텍스트로 메타데이터 업데이트
+                test_metadata = vector['metadata'].copy()
+                test_metadata[field] = reduced_text
+                
+                # 크기 확인
+                metadata_json = json.dumps(test_metadata, ensure_ascii=False)
+                metadata_size = len(metadata_json.encode('utf-8'))
+                
+                if metadata_size <= max_size:
+                    # 크기 제한을 만족하는 경우
+                    reduced_vector = vector.copy()
+                    reduced_vector['metadata'] = test_metadata
+                    logger.info(f"텍스트 축소 성공: {field} {len(original_text)} -> {len(reduced_text)} 문자")
+                    return reduced_vector
+                
+                # 마지막 시도에서도 실패한 경우
+                if attempt == max_attempts - 1:
+                    logger.warning(f"텍스트 축소 실패: {field} 필드")
+                    return None
+        
+        return None
     
     async def embed_and_upsert_to_pinecone(self, chunks: List[Dict[str, Any]], user_id: str) -> bool:
         """
         User 발화만 임베딩하여 Pinecone에 업로드합니다.
         사용자별 namespace를 사용하여 데이터를 격리합니다.
+        메타데이터 크기 제한(40KB)을 초과할 경우 대화 내역을 줄여가면서 재시도합니다.
         
         Args:
             chunks: 처리할 청크 리스트
@@ -170,6 +276,13 @@ class ConversationRAGService:
                     }
                 }
                 vectors.append(vector_data)
+            
+            # 메타데이터 크기 제한 처리
+            vectors = self._filter_vectors_by_metadata_size(vectors, user_id)
+            
+            if not vectors:
+                logger.warning("메타데이터 크기 제한으로 인해 업로드할 벡터가 없습니다.")
+                return True
             
             # Pinecone에 사용자별 namespace로 배치 업로드 (100개씩)
             batch_size = 100
