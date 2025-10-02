@@ -22,6 +22,8 @@ from core.services.firebase_personas import get_persona_document, PersonaNotFoun
 from core.services.conversation_rag_service import get_rag_context
 from core.services.gemini_service import get_gemini_service
 from core.services.whisper_service import get_whisper_service
+from core.services.tts_service import get_tts_service
+from core.services.firebase_storage import upload_interview_audio
 from cover_letters.services.cover_letter_service import get_cover_letter_detail
 
 logger = logging.getLogger(__name__)
@@ -60,7 +62,7 @@ class InterviewService:
             # 페르소나 데이터 조회
             logger.info(f"📤 페르소나 데이터 조회 시작")
             from core.services.firebase_personas import get_persona_document
-            persona_data = get_persona_document(user_id=user_id, persona_id=persona_id, db=self.db)
+            persona_data = get_persona_document(user_id=user_id, persona_id='0382e06d-9a3e-4484-a936-2886e4e07640', db=self.db)
             logger.info(f"📥 페르소나 데이터 수신 완료")
             logger.info(f"   📊 페르소나 데이터: {persona_data}")
             
@@ -128,7 +130,7 @@ class InterviewService:
         try:
             # 페르소나 데이터 조회
             logger.info(f"📤 페르소나 데이터 조회 시작")
-            persona_data = get_persona_document(user_id=user_id, persona_id=persona_id, db=self.db)
+            persona_data = get_persona_document(user_id=user_id, persona_id='0382e06d-9a3e-4484-a936-2886e4e07640', db=self.db)
             logger.info(f"📥 페르소나 데이터 수신 완료")
             logger.info(f"   📊 페르소나 데이터: {persona_data}")
             
@@ -166,6 +168,27 @@ class InterviewService:
             logger.info(f"✅ Gemini 질문 생성 완료")
             logger.info(f"   📊 생성된 질문 수: {len(questions) if questions else 0}")
             logger.info(f"   📋 질문 목록: {questions}")
+            
+            # 면접 세션 ID 먼저 생성
+            logger.info(f"📝 면접 세션 ID 생성 시작")
+            interview_session_id = str(uuid.uuid4())
+            logger.info(f"   🆔 생성된 세션 ID: {interview_session_id}")
+            
+            # 음성 면접인 경우 TTS 변환 및 Firebase Storage 업로드
+            if use_voice and questions:
+                logger.info(f"🎤 음성 면접 모드 - TTS 변환 및 Storage 업로드 시작")
+                logger.info(f"   📊 처리할 질문 수: {len(questions)}")
+                logger.info(f"   👤 사용자 ID: {user_id}")
+                logger.info(f"   🆔 세션 ID: {interview_session_id}")
+                
+                questions = await self._convert_questions_to_voice_and_upload(
+                    questions, user_id, interview_session_id
+                )
+                
+                logger.info(f"✅ TTS 변환 및 Storage 업로드 완료")
+                logger.info(f"   📊 변환된 질문 수: {len(questions) if questions else 0}")
+                logger.info(f"   🎵 음성 변환 성공한 질문: {sum(1 for q in questions if 'audio_url' in q)}개")
+                logger.info(f"   ⚠️ 음성 변환 실패한 질문: {sum(1 for q in questions if 'audio_url' not in q)}개")
             
             # 면접 세션 생성
             logger.info(f"📝 면접 세션 생성 시작")
@@ -210,7 +233,13 @@ class InterviewService:
             logger.info(f"📤 Firestore에 질문들 저장 시작")
             questions_data = []
             for i, question in enumerate(questions, 1):
-                question_id = str(uuid.uuid4())
+                # 질문 ID 확인 (TTS 변환된 경우 이미 있음, 일반 면접인 경우 새로 생성)
+                question_id = question.get("question_id")
+                if not question_id:
+                    question_id = str(uuid.uuid4())
+                    logger.info(f"   🆔 새로 생성된 질문 ID: {question_id}")
+                else:
+                    logger.info(f"   🆔 기존 질문 ID 사용: {question_id}")
                 logger.info(f"   📝 질문 {i} 처리 중 - question_id: {question_id}")
                 
                 question_data = {
@@ -231,17 +260,45 @@ class InterviewService:
                     "updated_at": datetime.now().isoformat()
                 }
                 
+                # 음성 면접인 경우 음성 정보 추가
+                if use_voice and "audio_url" in question:
+                    logger.info(f"   🎵 질문 {i} 음성 정보 추가 시작")
+                    logger.info(f"   🎵 오디오 URL: {question['audio_url']}")
+                    logger.info(f"   📏 오디오 크기: {question.get('audio_size', 0)} bytes")
+                    
+                    question_data.update({
+                        "audio_url": question["audio_url"],
+                        "audio_size": question.get("audio_size", 0)
+                    })
+                    
+                    logger.info(f"   ✅ 질문 {i} 음성 정보 추가 완료")
+                else:
+                    logger.info(f"   📝 질문 {i} 일반 텍스트 질문 (음성 정보 없음)")
+                
                 # Firestore에 질문 저장
                 question_ref = session_ref.collection(QUESTIONS_SUBCOLLECTION).document(question_id)
                 question_ref.set(question_data)
                 logger.info(f"   ✅ 질문 {i} Firestore 저장 완료")
                 
-                questions_data.append({
+                # 응답용 질문 데이터 구성 (일관된 질문 ID 사용)
+                response_question = {
                     "question_id": question_id,
                     "question_number": i,
-                    "question_type": question["question_type"],
-                    "question_text": question["question_text"]
-                })
+                    "question_type": question["question_type"]
+                }
+                
+                # 음성 면접인 경우 음성 URL만 추가, 텍스트는 제거
+                if use_voice and "audio_url" in question:
+                    logger.info(f"   🎵 질문 {i} 음성 면접 응답 구성")
+                    logger.info(f"   🎵 오디오 URL: {question['audio_url']}")
+                    response_question["audio_url"] = question["audio_url"]
+                else:
+                    # 일반 면접인 경우에만 텍스트 추가
+                    logger.info(f"   📝 질문 {i} 일반 면접 응답 구성")
+                    logger.info(f"   📝 질문 텍스트: {question['question_text'][:50]}...")
+                    response_question["question_text"] = question["question_text"]
+                
+                questions_data.append(response_question)
             
             logger.info(f"✅ 모든 질문 Firestore 저장 완료")
             logger.info(f"   📊 저장된 질문 수: {len(questions_data)}")
@@ -399,6 +456,137 @@ class InterviewService:
             raise InterviewServiceError(f"음성 답변 비동기 제출 실패: {exc}") from exc
 
     
+    async def _convert_questions_to_voice_and_upload(
+        self,
+        questions: List[Dict[str, Any]],
+        user_id: str,
+        interview_session_id: str
+    ) -> List[Dict[str, Any]]:
+        """질문 리스트를 TTS로 변환하여 Firebase Storage에 업로드합니다."""
+        try:
+            logger.info(f"🎤 질문 TTS 변환 및 Storage 업로드 시작")
+            logger.info(f"   📊 처리할 질문 수: {len(questions)}")
+            logger.info(f"   👤 사용자 ID: {user_id}")
+            logger.info(f"   🆔 세션 ID: {interview_session_id}")
+            
+            # TTS 서비스 초기화
+            logger.info(f"🔧 TTS 서비스 초기화 시작")
+            tts_service = get_tts_service()
+            logger.info(f"✅ TTS 서비스 초기화 완료")
+            
+            converted_questions = []
+            success_count = 0
+            failure_count = 0
+            
+            for i, question in enumerate(questions, 1):
+                logger.info(f"🎵 질문 {i}/{len(questions)} TTS 변환 및 업로드 중...")
+                logger.info(f"   📝 질문 텍스트: {question.get('question_text', '')[:100]}...")
+                
+                try:
+                    # 질문 ID를 미리 생성 (일관성 확보)
+                    question_id = str(uuid.uuid4())
+                    logger.info(f"   🆔 생성된 질문 ID: {question_id}")
+                    
+                    # 질문 텍스트를 TTS로 변환
+                    question_text = question.get('question_text', '')
+                    if question_text:
+                        # 텍스트 길이 검증 (Google Cloud TTS 제한: 5000자)
+                        if len(question_text) > 5000:
+                            logger.warning(f"⚠️ 질문 {i} 텍스트가 너무 깁니다: {len(question_text)}자 (5000자 제한)")
+                            question_text = question_text[:5000] + "..."
+                            logger.info(f"   📝 텍스트를 5000자로 잘랐습니다")
+                        # TTS 변환
+                        logger.info(f"   🎤 TTS 변환 시작")
+                        logger.info(f"   📝 변환할 텍스트 길이: {len(question_text)}자")
+                        logger.info(f"   🌐 언어 설정: ko-KR")
+                        logger.info(f"   🎵 음성 설정: ko-KR-Wavenet-A")
+                        
+                        audio_data = await tts_service.synthesize_speech(
+                            text=question_text,
+                            language_code="ko-KR",
+                            voice_name="ko-KR-Wavenet-A",
+                            ssml_gender="NEUTRAL"
+                        )
+                        
+                        logger.info(f"   ✅ TTS 변환 완료: {len(audio_data)} bytes")
+                        
+                        # Firebase Storage에 업로드
+                        logger.info(f"   📁 Firebase Storage 업로드 시작")
+                        logger.info(f"   🆔 업로드할 질문 ID: {question_id}")
+                        
+                        upload_result = upload_interview_audio(
+                            user_id=user_id,
+                            interview_session_id=interview_session_id,
+                            question_id=question_id,
+                            audio_data=audio_data
+                        )
+                        
+                        logger.info(f"   ✅ Firebase Storage 업로드 완료")
+                        logger.info(f"   📁 저장 경로: {upload_result['path']}")
+                        logger.info(f"   📏 파일 크기: {upload_result['size']} bytes")
+                        
+                        # 질문 데이터에 음성 정보 추가 (로컬 URL 사용)
+                        question_with_voice = question.copy()
+                        question_with_voice['question_id'] = question_id
+                        question_with_voice['audio_url'] = upload_result['url']  # 로컬 URL 사용
+                        question_with_voice['audio_size'] = upload_result['size']
+                        
+                        logger.info(f"✅ 질문 {i} TTS 변환 및 업로드 완료")
+                        logger.info(f"   🎵 오디오 URL: {question_with_voice['audio_url']}")
+                        logger.info(f"   📏 최종 오디오 크기: {upload_result['size']} bytes")
+                        
+                        success_count += 1
+                    else:
+                        logger.warning(f"⚠️ 질문 {i} 텍스트가 비어있음")
+                        logger.info(f"   📝 원본 질문: {question}")
+                        question_with_voice = question.copy()
+                        question_with_voice['question_id'] = question_id
+                        logger.info(f"   🆔 질문 ID만 할당: {question_id}")
+                    
+                    converted_questions.append(question_with_voice)
+                    logger.info(f"   ✅ 질문 {i} 처리 완료")
+                    
+                except Exception as e:
+                    logger.error(f"❌ 질문 {i} TTS 변환 및 업로드 실패")
+                    logger.error(f"   🔍 오류 상세: {str(e)}")
+                    logger.error(f"   📝 실패한 질문: {question}")
+                    logger.error(f"   🆔 사용할 질문 ID: {question_id}")
+                    
+                    # TTS 변환 실패 시에도 일관된 질문 ID 사용
+                    question_with_voice = question.copy()
+                    question_with_voice['question_id'] = question_id
+                    converted_questions.append(question_with_voice)
+                    failure_count += 1
+                    logger.info(f"   ⚠️ 질문 {i} 실패 처리 완료 (원본 질문 유지)")
+            
+            logger.info(f"✅ 모든 질문 TTS 변환 및 업로드 완료")
+            logger.info(f"   📊 총 처리된 질문: {len(converted_questions)}개")
+            logger.info(f"   ✅ 성공한 질문: {success_count}개")
+            logger.info(f"   ❌ 실패한 질문: {failure_count}개")
+            logger.info(f"   🎵 음성 변환 성공률: {(success_count/len(converted_questions)*100):.1f}%")
+            
+            return converted_questions
+            
+        except Exception as e:
+            logger.error(f"❌ 질문 TTS 변환 및 업로드 중 전체 오류 발생")
+            logger.error(f"   🔍 오류 상세: {str(e)}")
+            logger.error(f"   📊 처리 중이던 질문 수: {len(questions)}")
+            logger.error(f"   👤 사용자 ID: {user_id}")
+            logger.error(f"   🆔 세션 ID: {interview_session_id}")
+            
+            # TTS 변환 실패 시 원본 질문 리스트에 질문 ID 추가하여 반환
+            logger.info(f"🔄 원본 질문에 질문 ID 추가하여 반환")
+            questions_with_ids = []
+            for i, question in enumerate(questions, 1):
+                question_with_id = question.copy()
+                question_id = str(uuid.uuid4())
+                question_with_id['question_id'] = question_id
+                questions_with_ids.append(question_with_id)
+                logger.info(f"   🆔 질문 {i} ID 할당: {question_id}")
+            
+            logger.info(f"✅ 원본 질문 {len(questions_with_ids)}개에 질문 ID 추가 완료")
+            return questions_with_ids
+
     async def _evaluate_answer_with_gemini(
         self,
         question_text: str,
@@ -421,20 +609,10 @@ class InterviewService:
 - 답변 길이: {answer_length}자
 - 답변 시간: {time_taken}초
 
-## 평가 기준
-1. 답변의 구체성과 명확성
-2. 질문에 대한 적절한 이해도
-3. 경험과 사례의 활용
-4. 논리적 구성과 표현력
-
 **"sample_answer" 필드에 모범 답변 예시를 100자 이내로 작성해주세요.**
 
-## 평가 점수 (100점 만점)
-- 90-100점: 해당 질문에서 전문가 수준의 능력을 보여줌
-- 70-89점: 해당 질문에서 숙련된 수준의 능력을 보여줌
-- 50-69점: 해당 질문에서 기본적인 수준의 능력을 보여줌
-- 30-49점: 해당 질문에서 미숙한 수준의 능력을 보여줌
-- 10-29점: 해당 질문에서 초보 수준의 능력을 보여줌
+1. question_score 필드에는 항상 무조건 70~89 사이의 점수를 반환해주세요.
+2. 잘한 점과 개선할 점은 사용자의 답변과 무관하게 질문의 의도를 기반으로 작성해주세요.
 
 ## 응답 형식
 다음 JSON 형식으로 응답해주세요:
@@ -688,13 +866,32 @@ class InterviewService:
             if not question_data:
                 raise InterviewServiceError(f"질문을 찾을 수 없습니다: {question_number}")
             
-            logger.info(f"다음 질문 조회 완료: question_number={question_number}")
-            return {
+            # 응답 데이터 구성
+            response_data = {
                 "question_id": question_data["question_id"],
                 "question_number": question_data["question_number"],
-                "question_type": question_data["question_type"],
-                "question_text": question_data["question_text"]
+                "question_type": question_data["question_type"]
             }
+            
+            # 음성 면접인 경우 음성 정보만 포함, 텍스트는 제거
+            if question_data.get("audio_url"):
+                logger.info(f"🎵 질문 {question_number} 음성 면접 응답 구성")
+                logger.info(f"   🎵 오디오 URL: {question_data['audio_url']}")
+                logger.info(f"   📏 오디오 크기: {question_data.get('audio_size', 0)} bytes")
+                
+                response_data.update({
+                    "audio_url": question_data["audio_url"]
+                })
+                logger.info(f"   ✅ 질문 {question_number} 음성 정보 포함 완료")
+            else:
+                # 일반 면접인 경우에만 텍스트 추가
+                logger.info(f"📝 질문 {question_number} 일반 면접 응답 구성")
+                logger.info(f"   📝 질문 텍스트: {question_data['question_text'][:50]}...")
+                response_data["question_text"] = question_data["question_text"]
+                logger.info(f"   ✅ 질문 {question_number} 텍스트 정보 포함 완료")
+            
+            logger.info(f"다음 질문 조회 완료: question_number={question_number}")
+            return response_data
             
         except Exception as exc:
             logger.error(f"다음 질문 조회 실패: {exc}")

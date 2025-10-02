@@ -69,7 +69,8 @@ class QuestionSerializer(serializers.Serializer):
     question_id = serializers.CharField(help_text="질문 ID")
     question_number = serializers.IntegerField(help_text="질문 번호")
     question_type = serializers.CharField(help_text="질문 유형")
-    question_text = serializers.CharField(help_text="질문 내용")
+    question_text = serializers.CharField(required=False, help_text="질문 내용 (일반 면접인 경우)")
+    audio_url = serializers.URLField(required=False, help_text="음성 파일 URL (음성 면접인 경우)")
 
 
 class InterviewQuestionGenerationResponseSerializer(serializers.Serializer):
@@ -123,7 +124,8 @@ class NextQuestionResponseSerializer(serializers.Serializer):
     question_id = serializers.CharField(help_text="질문 ID")
     question_number = serializers.IntegerField(help_text="질문 번호")
     question_type = serializers.CharField(help_text="질문 유형")
-    question_text = serializers.CharField(help_text="질문 내용")
+    question_text = serializers.CharField(required=False, help_text="질문 내용 (일반 면접인 경우)")
+    audio_url = serializers.URLField(required=False, help_text="음성 파일 URL (음성 면접인 경우)")
 
 
 class QuestionResultSerializer(serializers.Serializer):
@@ -188,5 +190,6 @@ class QuestionDetailResponseSerializer(serializers.Serializer):
         child=serializers.CharField(),
         help_text="질문의 의도 목록"
     )
+    audio_url = serializers.URLField(required=False, help_text="음성 파일 URL (음성 면접인 경우)")
     created_at = serializers.DateTimeField(help_text="생성일시")
     updated_at = serializers.DateTimeField(help_text="수정일시")

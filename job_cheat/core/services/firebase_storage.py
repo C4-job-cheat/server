@@ -151,6 +151,87 @@ def delete_persona_file(
         return False
 
 
+def upload_interview_audio(
+    *,
+    user_id: str,
+    interview_session_id: str,
+    question_id: str,
+    audio_data: bytes,
+    bucket=None,
+    cache_control: str = "public, max-age=3600",
+) -> Dict[str, Any]:
+    """면접 질문 TTS 오디오 파일을 Storage에 업로드하고 메타데이터를 반환한다."""
+
+    if not user_id:
+        raise ValueError("user_id 값이 필요합니다.")
+    if not interview_session_id:
+        raise ValueError("interview_session_id 값이 필요합니다.")
+    if not question_id:
+        raise ValueError("question_id 값이 필요합니다.")
+    if not audio_data:
+        raise ValueError("audio_data 값이 필요합니다.")
+
+    bucket_instance = _resolve_bucket(bucket=bucket)
+    # 면접 오디오 파일 저장 경로: users/{user_id}/interviews/{session_id}/questions/{question_id}.mp3
+    blob_path = f"users/{user_id}/interviews/{interview_session_id}/questions/{question_id}.mp3"
+    blob = bucket_instance.blob(blob_path)
+    blob.cache_control = cache_control
+
+    try:
+        blob.upload_from_string(audio_data, content_type="audio/mpeg")
+        logger.info(f"면접 오디오 파일 Firebase Storage 업로드 성공: {blob_path}")
+    except (gcloud_exceptions.GoogleCloudError, Exception) as exc:
+        logger.exception("면접 오디오 파일 Firebase Storage 업로드 실패", extra={
+            "user_id": user_id, 
+            "interview_session_id": interview_session_id, 
+            "question_id": question_id
+        })
+        raise PersonaHtmlUploadError(str(exc)) from exc
+
+    # Firebase Storage 공개 URL 생성
+    public_url = blob.public_url
+    
+    # 결제 계정 문제로 인한 임시 해결책: 로컬 파일 서빙
+    # TODO: Firebase 결제 계정 문제 해결 후 제거
+    try:
+        # 로컬에 오디오 파일 저장
+        import os
+        from django.conf import settings
+        
+        # 로컬 오디오 파일 저장 경로 (staticfiles 디렉토리 사용)
+        local_audio_dir = os.path.join(settings.BASE_DIR, 'staticfiles', 'audio', 'interviews')
+        os.makedirs(local_audio_dir, exist_ok=True)
+        
+        local_file_path = os.path.join(local_audio_dir, f"{question_id}.mp3")
+        with open(local_file_path, 'wb') as f:
+            f.write(audio_data)
+        
+        # 로컬 서빙 URL 생성 (ngrok URL 포함)
+        from django.conf import settings
+        base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
+        local_url = f"{base_url}/static/audio/interviews/{question_id}.mp3"
+        logger.info(f"로컬 오디오 파일 저장: {local_file_path}")
+        logger.info(f"로컬 서빙 URL: {local_url}")
+        
+        # 로컬 URL을 우선 사용 (Firebase URL은 백업으로 유지)
+        return {
+            "path": blob_path,
+            "content_type": "audio/mpeg",
+            "size": len(audio_data),
+            "url": local_url,  # 로컬 URL 사용
+            "firebase_url": public_url,  # Firebase URL 백업
+        }
+        
+    except Exception as e:
+        logger.warning(f"로컬 파일 저장 실패, Firebase URL 사용: {e}")
+        return {
+            "path": blob_path,
+            "content_type": "audio/mpeg",
+            "size": len(audio_data),
+            "url": public_url,
+        }
+
+
 def download_persona_json(
     *,
     user_id: str,

@@ -500,6 +500,21 @@ wheels = [
 ]
 
 [[package]]
+name = "google-cloud-texttospeech"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ec/4b/7ccadbec28ee255a3176c3de0a14705c4b6469777f1c7ddbf4452fa893e3/google_cloud_texttospeech-2.31.0.tar.gz", hash = "sha256:1f0c0c6448f175e1e2f63d96fb13af5d9abee6970bbb22c1e4036f53136a5588", size = 184880, upload-time = "2025-09-25T14:03:22.786Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/18/3e/54ff1a5af26f90c5d76e7e80b9208f8484035b5bd8fb6a06c819fed6a8c9/google_cloud_texttospeech-2.31.0-py3-none-any.whl", hash = "sha256:9442134b4b8e7e3d179dfd3850a5a953a6a6a9cf000a3640caddb85cf97ab69b", size = 191280, upload-time = "2025-09-25T14:03:16.667Z" },
+]
+
+[[package]]
 name = "google-crc32c"
 version = "1.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -847,6 +862,7 @@ dependencies = [
     { name = "django-cors-headers" },
     { name = "djangorestframework" },
     { name = "firebase-admin" },
+    { name = "google-cloud-texttospeech" },
     { name = "google-generativeai" },
     { name = "gunicorn" },
     { name = "numpy" },
@@ -869,6 +885,7 @@ requires-dist = [
     { name = "django-cors-headers", specifier = ">=4.3" },
     { name = "djangorestframework", specifier = ">=3.15" },
     { name = "firebase-admin", specifier = ">=6.5" },
+    { name = "google-cloud-texttospeech", specifier = ">=2.31.0" },
     { name = "google-generativeai", specifier = ">=0.8.5" },
     { name = "gunicorn", specifier = ">=21.2.0" },
     { name = "numpy", specifier = ">=2.3.3" },

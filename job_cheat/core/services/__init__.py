@@ -12,6 +12,7 @@ from .rag_competency_evaluator import (
     get_competency_evaluator,
     RAGCompetencyEvaluator,
 )
+from .tts_service import get_tts_service, TTSService
 
 __all__ = [
     'get_embedding_service',
@@ -24,5 +25,7 @@ __all__ = [
     'GeminiService',
     'get_competency_evaluator',
     'RAGCompetencyEvaluator',
+    'get_tts_service',
+    'TTSService',
 ]
 
