@@ -191,45 +191,15 @@ def upload_interview_audio(
     # Firebase Storage 공개 URL 생성
     public_url = blob.public_url
     
-    # 결제 계정 문제로 인한 임시 해결책: 로컬 파일 서빙
-    # TODO: Firebase 결제 계정 문제 해결 후 제거
-    try:
-        # 로컬에 오디오 파일 저장
-        import os
-        from django.conf import settings
-        
-        # 로컬 오디오 파일 저장 경로 (staticfiles 디렉토리 사용)
-        local_audio_dir = os.path.join(settings.BASE_DIR, 'staticfiles', 'audio', 'interviews')
-        os.makedirs(local_audio_dir, exist_ok=True)
-        
-        local_file_path = os.path.join(local_audio_dir, f"{question_id}.mp3")
-        with open(local_file_path, 'wb') as f:
-            f.write(audio_data)
-        
-        # 로컬 서빙 URL 생성 (ngrok URL 포함)
-        from django.conf import settings
-        base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
-        local_url = f"{base_url}/static/audio/interviews/{question_id}.mp3"
-        logger.info(f"로컬 오디오 파일 저장: {local_file_path}")
-        logger.info(f"로컬 서빙 URL: {local_url}")
-        
-        # 로컬 URL을 우선 사용 (Firebase URL은 백업으로 유지)
-        return {
-            "path": blob_path,
-            "content_type": "audio/mpeg",
-            "size": len(audio_data),
-            "url": local_url,  # 로컬 URL 사용
-            "firebase_url": public_url,  # Firebase URL 백업
-        }
-        
-    except Exception as e:
-        logger.warning(f"로컬 파일 저장 실패, Firebase URL 사용: {e}")
-        return {
-            "path": blob_path,
-            "content_type": "audio/mpeg",
-            "size": len(audio_data),
-            "url": public_url,
-        }
+    logger.info(f"Firebase Storage 오디오 파일 업로드 완료: {blob_path}")
+    logger.info(f"공개 URL: {public_url}")
+    
+    return {
+        "path": blob_path,
+        "content_type": "audio/mpeg",
+        "size": len(audio_data),
+        "url": public_url,
+    }
 
 
 def download_persona_json(

@@ -5,7 +5,7 @@ Google Cloud Text-to-Speech API 연동 서비스
 import os
 import logging
 import tempfile
-from typing import Optional
+from typing import Optional, Dict, Any
 from google.cloud import texttospeech
 from dotenv import load_dotenv
 
@@ -93,28 +93,38 @@ class TTSService:
             logger.error(f"❌ TTS 음성 변환 실패: {e}")
             raise TTSServiceError(f"TTS 음성 변환 실패: {e}") from e
 
-    async def synthesize_speech_to_file(
+    async def synthesize_speech_to_firebase(
         self,
         text: str,
-        output_path: str,
+        user_id: str,
+        interview_session_id: str,
+        question_id: str,
         language_code: str = "ko-KR",
         voice_name: str = "ko-KR-Wavenet-A",
         ssml_gender: str = "NEUTRAL"
-    ) -> str:
+    ) -> Dict[str, Any]:
         """
-        텍스트를 음성으로 변환하여 파일로 저장합니다.
+        텍스트를 음성으로 변환하여 Firebase Storage에 직접 업로드합니다.
         
         Args:
             text: 변환할 텍스트
-            output_path: 출력 파일 경로
+            user_id: 사용자 ID
+            interview_session_id: 면접 세션 ID
+            question_id: 질문 ID
             language_code: 언어 코드
             voice_name: 음성 이름
             ssml_gender: 음성 성별
             
         Returns:
-            str: 저장된 파일 경로
+            Dict[str, Any]: 업로드 결과 (path, url, size 등)
         """
         try:
+            logger.info(f"🎤 TTS 음성 변환 및 Firebase Storage 업로드 시작")
+            logger.info(f"   📝 변환할 텍스트: {text[:100] + '...' if len(text) > 100 else text}")
+            logger.info(f"   👤 사용자 ID: {user_id}")
+            logger.info(f"   🆔 세션 ID: {interview_session_id}")
+            logger.info(f"   🆔 질문 ID: {question_id}")
+            
             # 음성 변환
             audio_data = await self.synthesize_speech(
                 text=text,
@@ -123,55 +133,27 @@ class TTSService:
                 ssml_gender=ssml_gender
             )
             
-            # 파일로 저장
-            with open(output_path, "wb") as out_file:
-                out_file.write(audio_data)
+            logger.info(f"✅ TTS 음성 변환 완료: {len(audio_data)} bytes")
             
-            logger.info(f"📁 TTS 음성 파일 저장 완료: {output_path}")
-            return output_path
-            
-        except Exception as e:
-            logger.error(f"❌ TTS 음성 파일 저장 실패: {e}")
-            raise TTSServiceError(f"TTS 음성 파일 저장 실패: {e}") from e
-
-    async def synthesize_speech_to_temp_file(
-        self,
-        text: str,
-        language_code: str = "ko-KR",
-        voice_name: str = "ko-KR-Wavenet-A",
-        ssml_gender: str = "NEUTRAL"
-    ) -> str:
-        """
-        텍스트를 음성으로 변환하여 임시 파일로 저장합니다.
-        
-        Args:
-            text: 변환할 텍스트
-            language_code: 언어 코드
-            voice_name: 음성 이름
-            ssml_gender: 음성 성별
-            
-        Returns:
-            str: 임시 파일 경로
-        """
-        try:
-            # 임시 파일 생성
-            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_file:
-                temp_file_path = temp_file.name
-            
-            # 음성 변환 및 저장
-            await self.synthesize_speech_to_file(
-                text=text,
-                output_path=temp_file_path,
-                language_code=language_code,
-                voice_name=voice_name,
-                ssml_gender=ssml_gender
+            # Firebase Storage에 직접 업로드
+            from .firebase_storage import upload_interview_audio
+            upload_result = upload_interview_audio(
+                user_id=user_id,
+                interview_session_id=interview_session_id,
+                question_id=question_id,
+                audio_data=audio_data
             )
             
-            return temp_file_path
+            logger.info(f"✅ Firebase Storage 업로드 완료")
+            logger.info(f"   📁 저장 경로: {upload_result['path']}")
+            logger.info(f"   🔗 URL: {upload_result['url']}")
+            logger.info(f"   📏 파일 크기: {upload_result['size']} bytes")
+            
+            return upload_result
             
         except Exception as e:
-            logger.error(f"❌ TTS 임시 파일 생성 실패: {e}")
-            raise TTSServiceError(f"TTS 임시 파일 생성 실패: {e}") from e
+            logger.error(f"❌ TTS Firebase Storage 업로드 실패: {e}")
+            raise TTSServiceError(f"TTS Firebase Storage 업로드 실패: {e}") from e
 
 
 # 전역 인스턴스

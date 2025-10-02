@@ -23,7 +23,6 @@ from core.services.conversation_rag_service import get_rag_context
 from core.services.gemini_service import get_gemini_service
 from core.services.whisper_service import get_whisper_service
 from core.services.tts_service import get_tts_service
-from core.services.firebase_storage import upload_interview_audio
 from cover_letters.services.cover_letter_service import get_cover_letter_detail
 
 logger = logging.getLogger(__name__)
@@ -487,7 +486,7 @@ class InterviewService:
                     question_id = str(uuid.uuid4())
                     logger.info(f"   🆔 생성된 질문 ID: {question_id}")
                     
-                    # 질문 텍스트를 TTS로 변환
+                    # 질문 텍스트를 TTS로 변환하여 Firebase Storage에 직접 업로드
                     question_text = question.get('question_text', '')
                     if question_text:
                         # 텍스트 길이 검증 (Google Cloud TTS 제한: 5000자)
@@ -495,43 +494,30 @@ class InterviewService:
                             logger.warning(f"⚠️ 질문 {i} 텍스트가 너무 깁니다: {len(question_text)}자 (5000자 제한)")
                             question_text = question_text[:5000] + "..."
                             logger.info(f"   📝 텍스트를 5000자로 잘랐습니다")
-                        # TTS 변환
-                        logger.info(f"   🎤 TTS 변환 시작")
+                        
+                        # TTS 변환 및 Firebase Storage 직접 업로드
+                        logger.info(f"   🎤 TTS 변환 및 Firebase Storage 업로드 시작")
                         logger.info(f"   📝 변환할 텍스트 길이: {len(question_text)}자")
                         logger.info(f"   🌐 언어 설정: ko-KR")
                         logger.info(f"   🎵 음성 설정: ko-KR-Wavenet-A")
                         
-                        audio_data = await tts_service.synthesize_speech(
+                        upload_result = await tts_service.synthesize_speech_to_firebase(
                             text=question_text,
+                            user_id=user_id,
+                            interview_session_id=interview_session_id,
+                            question_id=question_id,
                             language_code="ko-KR",
                             voice_name="ko-KR-Wavenet-A",
                             ssml_gender="NEUTRAL"
                         )
                         
-                        logger.info(f"   ✅ TTS 변환 완료: {len(audio_data)} bytes")
-                        
-                        # Firebase Storage에 업로드
-                        logger.info(f"   📁 Firebase Storage 업로드 시작")
-                        logger.info(f"   🆔 업로드할 질문 ID: {question_id}")
-                        
-                        upload_result = upload_interview_audio(
-                            user_id=user_id,
-                            interview_session_id=interview_session_id,
-                            question_id=question_id,
-                            audio_data=audio_data
-                        )
-                        
-                        logger.info(f"   ✅ Firebase Storage 업로드 완료")
-                        logger.info(f"   📁 저장 경로: {upload_result['path']}")
-                        logger.info(f"   📏 파일 크기: {upload_result['size']} bytes")
-                        
-                        # 질문 데이터에 음성 정보 추가 (로컬 URL 사용)
+                        # 질문 데이터에 음성 정보 추가
                         question_with_voice = question.copy()
                         question_with_voice['question_id'] = question_id
-                        question_with_voice['audio_url'] = upload_result['url']  # 로컬 URL 사용
+                        question_with_voice['audio_url'] = upload_result['url']  # Firebase URL 사용
                         question_with_voice['audio_size'] = upload_result['size']
                         
-                        logger.info(f"✅ 질문 {i} TTS 변환 및 업로드 완료")
+                        logger.info(f"✅ 질문 {i} TTS 변환 및 Firebase Storage 업로드 완료")
                         logger.info(f"   🎵 오디오 URL: {question_with_voice['audio_url']}")
                         logger.info(f"   📏 최종 오디오 크기: {upload_result['size']} bytes")
                         
