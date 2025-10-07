@@ -83,7 +83,9 @@ def _convert_competencies_for_evaluation(core_competencies: List[Dict[str, str]]
         
         converted_competencies.append(converted_competency)
     
-    logger.info(f"역량 평가용 형식으로 변환 완료: {len(converted_competencies)}개")
+    logger.info(f"📋 입력된 core_competencies: {len(core_competencies)}개")
+    logger.info(f"   📊 역량 목록: {[comp.get('name', 'Unknown') for comp in core_competencies]}")
+    logger.info(f"📋 역량 평가용 형식으로 변환 완료: {len(converted_competencies)}개")
     return converted_competencies
 
 

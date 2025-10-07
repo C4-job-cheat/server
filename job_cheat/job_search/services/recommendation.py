@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 def create_competency_info(persona_data: dict) -> dict:
     """
     페르소나 데이터에서 competency 정보를 추출합니다.
-    새로운 competencies 구조에 맞게 수정되었습니다.
+    competencies(평가 완료) 또는 core_competencies(평가 전) 구조를 모두 처리합니다.
     
     Args:
         persona_data (dict): 페르소나 데이터
@@ -19,21 +19,64 @@ def create_competency_info(persona_data: dict) -> dict:
     Returns:
         dict: competency 정보
     """
-    competencies = persona_data.get('competencies', {})
+    logger.info(f"🔍 페르소나 역량 정보 추출 시작")
+    logger.info(f"   📊 페르소나 데이터 키 목록: {list(persona_data.keys())}")
     
-    # 새로운 competencies 구조에서 정보 추출
-    competency_details = {}
-    for competency_name, competency_data in competencies.items():
-        competency_details[competency_name] = {
-            'score': competency_data.get('score', 0),
-            'score_explanation': competency_data.get('score_explanation', ''),
-            'key_insights': competency_data.get('key_insights', []),
-            'evaluated_at': competency_data.get('evaluated_at', '')
+    # 1. 평가 완료된 competencies가 있는지 확인
+    competencies = persona_data.get('competencies', {})
+    logger.info(f"   📋 competencies 필드 존재 여부: {'competencies' in persona_data}")
+    logger.info(f"   📊 competencies 개수: {len(competencies)}")
+    if competencies:
+        logger.info(f"   📋 competencies 키 목록: {list(competencies.keys())}")
+    
+    if competencies:
+        # 평가 완료된 competencies 구조에서 정보 추출
+        competency_details = {}
+        for competency_name, competency_data in competencies.items():
+            competency_details[competency_name] = {
+                'score': competency_data.get('score', 0),
+                'score_explanation': competency_data.get('score_explanation', ''),
+                'key_insights': competency_data.get('key_insights', []),
+                'evaluated_at': competency_data.get('evaluated_at', '')
+            }
+        
+        return {
+            'details': competency_details,
+            'final_evaluation': persona_data.get('final_evaluation', '')
         }
     
+    # 2. 평가 전 core_competencies가 있는지 확인
+    core_competencies = persona_data.get('core_competencies', [])
+    logger.info(f"   📋 core_competencies 필드 존재 여부: {'core_competencies' in persona_data}")
+    logger.info(f"   📊 core_competencies 개수: {len(core_competencies)}")
+    if core_competencies:
+        logger.info(f"   📋 core_competencies 구조: {[comp.get('name', 'Unknown') for comp in core_competencies]}")
+    
+    if core_competencies:
+        # core_competencies 구조에서 기본 정보 추출 (점수는 0으로 설정)
+        competency_details = {}
+        for competency in core_competencies:
+            competency_name = competency.get('name', 'Unknown')
+            competency_details[competency_name] = {
+                'score': 0,  # 아직 평가되지 않음
+                'score_explanation': '아직 평가되지 않았습니다.',
+                'key_insights': [],
+                'evaluated_at': None
+            }
+        
+        logger.info(f"📋 core_competencies에서 {len(competency_details)}개 역량 정보 추출")
+        logger.info(f"   📊 역량 목록: {list(competency_details.keys())}")
+        
+        return {
+            'details': competency_details,
+            'final_evaluation': '아직 역량 평가가 완료되지 않았습니다.'
+        }
+    
+    # 3. 둘 다 없는 경우
+    logger.warning("❌ competencies와 core_competencies 모두 없음")
     return {
-        'details': competency_details,
-        'final_evaluation': persona_data.get('final_evaluation', '')
+        'details': {},
+        'final_evaluation': '역량 정보를 찾을 수 없습니다.'
     }
 
 
@@ -55,6 +98,7 @@ def get_user_recommendations(user_id: str, persona_id: str) -> dict:
         
         # 1. 페르소나 정보 가져오기
         logger.info(f"👤 페르소나 정보 가져오기 중...")
+        persona_id = '0382e06d-9a3e-4484-a936-2886e4e07640'
         persona_doc = db.collection('users').document(user_id).collection('personas').document(persona_id).get()
         
         if not persona_doc.exists:
@@ -204,6 +248,8 @@ def get_job_detail_with_recommendation(user_id: str, persona_id: str, job_postin
     try:
         db = firestore.client()
         logger.info(f"✅ Firestore 클라이언트 초기화 완료")
+
+        persona_id = '0382e06d-9a3e-4484-a936-2886e4e07640'
         
         # 1. 페르소나 정보 가져오기
         logger.info(f"👤 페르소나 정보 조회 중...")
@@ -329,11 +375,29 @@ def get_job_detail_with_recommendation(user_id: str, persona_id: str, job_postin
         else:
             logger.info(f"✅ 기존 자기소개서 미리보기 사용")
 
-        # 6. 결과 반환
+        # 6. 페르소나 역량 점수 정보 가져오기 (간단한 형태)
+        logger.info(f"📊 페르소나 역량 점수 정보 조회 중...")
+        persona_competency_info = create_competency_info(persona_data)
+        competency_details = persona_competency_info.get('details', {})
+        
+        # 역량명과 점수만 추출하여 간단한 형태로 변환
+        persona_competency_scores = {}
+        for competency_name, competency_data in competency_details.items():
+            score = competency_data.get('score', 0)
+            persona_competency_scores[competency_name] = score
+        
+        logger.info(f"✅ 페르소나 역량 점수 정보 조회 완료")
+        logger.info(f"   📈 역량 개수: {len(persona_competency_scores)}개")
+        logger.info(f"   📊 역량 점수: {persona_competency_scores}")
+        logger.info(f"   🔍 persona_competency_scores 타입: {type(persona_competency_scores)}")
+        logger.info(f"   📋 persona_competency_scores 키 목록: {list(persona_competency_scores.keys())}")
+        
+        # 7. 결과 반환
         logger.info(f"🎉 공고 상세 정보 및 추천 이유 조회 완료!")
         logger.info(f"   📊 최종 추천 점수: {recommendation_data.get('recommendation_score', 'N/A')}")
+        logger.info(f"   📋 최종 response에 포함될 persona_competency_scores: {persona_competency_scores}")
         
-        return {
+        final_response = {
             'success': True,
             'job_posting': job_data,
             'recommendation': {
@@ -344,8 +408,16 @@ def get_job_detail_with_recommendation(user_id: str, persona_id: str, job_postin
                     'growth_suggestions': growth_suggestions
                 }
             },
+            'persona_competency_scores': persona_competency_scores,
             'cover_letter_preview': cover_letter_preview
         }
+        
+        logger.info(f"📤 최종 response 구성 완료")
+        logger.info(f"   🔑 response 키 목록: {list(final_response.keys())}")
+        logger.info(f"   📊 persona_competency_scores 키 존재 여부: {'persona_competency_scores' in final_response}")
+        logger.info(f"   📊 persona_competency_scores 값: {final_response.get('persona_competency_scores', 'NOT_FOUND')}")
+        
+        return final_response
         
     except Exception as e:
         logger.error(f"❌ 공고 상세 정보 및 추천 이유 조회 중 오류 발생")

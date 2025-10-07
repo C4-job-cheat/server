@@ -193,7 +193,7 @@ async def _async_conversation_rag_job(
                             
                             if evaluation_result:
                                 competency_evaluation_results[competency_name] = evaluation_result
-                                logger.info(f"✅ {competency_name} 역량 평가 완료: {evaluation_result.get('score', 'N/A')}/10")
+                                logger.info(f"✅ {competency_name} 역량 평가 완료: {evaluation_result.get('score', 'N/A')}/100")
                             else:
                                 logger.warning(f"⚠️ {competency_name} 역량 평가 실패")
                         else:
