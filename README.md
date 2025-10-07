@@ -161,17 +161,17 @@ uv run python runserver_asgi.py 0.0.0.0:8000
 
 ### 핵심 모듈
 
-- [**Core Services**](core/README_Core_Services.md) - 공통 인프라 서비스 및 유틸리티
-- [**API App**](api/README_API_App.md) - REST API 엔드포인트
+- [**Core Services**](job_cheat/core/README_Core_Services.md) - 공통 인프라 서비스 및 유틸리티
+- [**API App**](job_cheat/api/README_API_App.md) - REST API 엔드포인트
 
 ### 도메인 앱
 
-- [**Personas**](personas/README_Personas_App.md) - 페르소나 데이터 관리
-- [**Interviews**](interviews/README_Interviews_App.md) - AI 기반 면접 서비스
-- [**Cover Letters**](cover_letters/README_Cover_Letters_App.md) - 자기소개서 생성 서비스
-- [**Job Search**](job_search/README_Job_Search_App.md) - 채용공고 검색 및 추천
+- [**Personas**](job_cheat/personas/README_Personas_App.md) - 페르소나 데이터 관리
+- [**Interviews**](job_cheat/interviews/README_Interviews_App.md) - AI 기반 면접 서비스
+- [**Cover Letters**](job_cheat/cover_letters/README_Cover_Letters_App.md) - 자기소개서 생성 서비스
+- [**Job Search**](job_cheat/job_search/README_Job_Search_App.md) - 채용공고 검색 및 추천
 
 ### 기술 문서
 
-- [**Database Schema**](docs/README_Database_Schema.md) - 데이터베이스 스키마 설계
-- [**Conversation RAG System**](core/services/README_Conversation_RAG_System.md) - RAG 시스템 구현 가이드
+- [**Database Schema**](job_cheat/docs/README_Database_Schema.md) - 데이터베이스 스키마 설계
+- [**Conversation RAG System**](job_cheat/core/services/README_Conversation_RAG_System.md) - RAG 시스템 구현 가이드
